@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="meeting-live">
+  <section class="meeting-live-toolbar">
+    <div class="meeting-live-menu">☰</div>
+    <div class="meeting-live-search">
+      <span>⌕</span>
+      <input placeholder="Search..." />
+      <kbd>⌘K</kbd>
+    </div>
+    <a class="meeting-live-link" href="/dashboard">Back</a>
+    <button id="copyInviteBtn" type="button">Copy Invite Link</button>
+    <button id="resetViewBtn" type="button">Reset View</button>
+    <input id="guestInviteUrl" type="text" value="{{ guest_join_url }}" readonly class="meeting-live-hidden-url">
+  </section>
+
+  <section class="meeting-live-header">
+    <span class="meeting-live-dot"></span>
+    <h2>{{ meeting.room_id|replace('-', ' ')|title }}</h2>
+    <span id="deviceStatus">Device permission not requested yet</span>
+  </section>
+
+  <section class="meeting-live-layout">
+    <article class="meeting-live-main">
+      <div class="jitsi-stage meeting-live-stage">
+        <div id="jitsi-container" class="meeting-jitsi-frame"></div>
+        <div id="jitsi-bot-container" class="jitsi-bot-hidden"></div>
+        <div class="ai-tile-overlay" id="aiTileOverlay">
+          <div class="ai-avatar">AI</div>
+          <div class="ai-meta">
+            <strong>{{ agent.name }}</strong>
+            <span id="ai-status-inline">Connected</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="meeting-live-controls">
+        <button id="startInterviewBtn" type="button">Start Interview</button>
+        <button id="toggleVoiceBtn" type="button">Voice: On</button>
+        <button id="enableDevicesBtn" type="button">Enable Camera & Mic</button>
+        <button id="toggleJitsiMicBtn" type="button">Toggle Meeting Mic</button>
+        <button id="toggleJitsiCamBtn" type="button">Toggle Meeting Camera</button>
+        <button id="micToggleBtn" type="button">Start Mic</button>
+      </div>
+
+      <div class="meeting-live-chatrow">
+        <input id="chatInput" type="text" placeholder="Type a message for AI..." />
+        <button id="sendChatBtn" type="button">Send</button>
+      </div>
+      <div id="chat-box" class="chat-box meeting-live-chatbox"></div>
+      <div id="liveText" class="hint"></div>
+    </article>
+
+    <aside class="meeting-live-side">
+      <div class="meeting-live-user-badge">{{ (user.email[0:2]|upper) if user and user.email else 'JD' }}</div>
+      <div class="meeting-live-you">You</div>
+      <div id="micState">Muted</div>
+      <p id="ai-status">{{ agent.name }} connected</p>
+    </aside>
+  </section>
+
+  <section class="meeting-live-panels">
+    <article class="card">
+      <h3>Rolling Summary (Live)</h3>
+      <button id="refreshSummaryBtn" type="button">Refresh Now</button>
+      <div id="summaryBox" class="chat-box" style="min-height:180px;max-height:260px;"></div>
+    </article>
+
+    <article class="card">
+      <h3>Ask Meeting Memory</h3>
+      <div class="stack">
+        <textarea id="qaQuestion" rows="3" placeholder="What did we decide about timeline?"></textarea>
+        <button id="qaAskBtn" type="button">Ask</button>
+      </div>
+      <div id="qaAnswer" class="chat-box" style="min-height:180px;max-height:260px;"></div>
+    </article>
+  </section>
+
+  <section class="card">
+    <h3>Transcripts</h3>
+    <ul id="transcriptList" class="clean-list">
+      {% for row in transcripts %}
+        <li><strong>{{ row.speaker }}</strong>: {{ row.text }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+
+<script src="https://meet.jit.si/external_api.js"></script>
+<script>
+  const meetingId = {{ meeting.id }};
+  const agentName = {{ agent.name|tojson }};
+  const interviewScript = {{ (agent.interview_script or "")|tojson }};
+  const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
+  const socket = new WebSocket(`${wsProtocol}://${location.host}/ws/${meetingId}`);
+  const chatBox = document.getElementById("chat-box");
+  const liveText = document.getElementById("liveText");
+  const transcriptList = document.getElementById("transcriptList");
+  const refreshSummaryBtn = document.getElementById("refreshSummaryBtn");
+  const summaryBox = document.getElementById("summaryBox");
+  const qaQuestion = document.getElementById("qaQuestion");
+  const qaAskBtn = document.getElementById("qaAskBtn");
+  const qaAnswer = document.getElementById("qaAnswer");
+  const startInterviewBtn = document.getElementById("startInterviewBtn");
+  const toggleVoiceBtn = document.getElementById("toggleVoiceBtn");
+  const micToggleBtn = document.getElementById("micToggleBtn");
+  const chatInput = document.getElementById("chatInput");
+  const sendChatBtn = document.getElementById("sendChatBtn");
+  const micState = document.getElementById("micState");
+  const resetViewBtn = document.getElementById("resetViewBtn");
+  const copyInviteBtn = document.getElementById("copyInviteBtn");
+  const guestInviteUrl = document.getElementById("guestInviteUrl");
+  const enableDevicesBtn = document.getElementById("enableDevicesBtn");
+  const toggleJitsiMicBtn = document.getElementById("toggleJitsiMicBtn");
+  const toggleJitsiCamBtn = document.getElementById("toggleJitsiCamBtn");
+  const deviceStatus = document.getElementById("deviceStatus");
+  const aiStatus = document.getElementById("ai-status");
+  const aiStatusInline = document.getElementById("ai-status-inline");
+  let voiceEnabled = true;
+  let interviewStarted = false;
+  let isListening = false;
+  let recognition = null;
+  let rollingSummaryTimer = null;
+
+  async function saveTranscriptLine(speaker, text) {
+    if (!text || !text.trim()) return;
+    try {
+      await fetch(`/meetings/${meetingId}/transcripts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ speaker, text: text.trim() }),
+      });
+      const item = document.createElement("li");
+      item.innerHTML = `<strong>${speaker}</strong>: ${text.trim()}`;
+      transcriptList.appendChild(item);
+    } catch (_) {}
+  }
+
+  socket.onmessage = (event) => {
+    chatBox.innerHTML += `<p><b>${agentName}:</b> ${event.data}</p>`;
+    chatBox.scrollTop = chatBox.scrollHeight;
+    saveTranscriptLine(agentName, event.data);
+    aiStatus.textContent = "AI is speaking";
+    aiStatusInline.textContent = "Speaking";
+    speakText(event.data);
+    setTimeout(() => {
+      aiStatus.textContent = "AI interviewer connected";
+      aiStatusInline.textContent = "Connected";
+    }, 1200);
+  };
+  socket.onopen = () => {
+    aiStatus.textContent = "AI interviewer connected";
+    aiStatusInline.textContent = "Connected";
+  };
+  socket.onerror = () => {
+    aiStatus.textContent = "Chat connection error";
+    aiStatusInline.textContent = "Error";
+  };
+
+  function sendToAI(message) {
+    const normalized = (message || "").trim();
+    if (!normalized) return;
+    if (socket.readyState !== WebSocket.OPEN) {
+      chatBox.innerHTML += "<p><b>System:</b> Chat connection is not ready. Reload page.</p>";
+      return;
+    }
+    socket.send(message);
+    chatBox.innerHTML += `<p><b>You:</b> ${normalized}</p>`;
+    chatBox.scrollTop = chatBox.scrollHeight;
+    saveTranscriptLine("candidate", normalized);
+    liveText.textContent = "";
+  }
+
+  function speakText(text) {
+    if (!voiceEnabled || !window.speechSynthesis) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function startInterview() {
+    if (interviewStarted) return;
+    interviewStarted = true;
+    let firstQuestion = "Let's begin. Please introduce yourself and your recent experience.";
+    if (interviewScript.trim()) {
+      firstQuestion = interviewScript.split("\n").find((line) => line.trim()) || firstQuestion;
+    }
+    chatBox.innerHTML += `<p><b>${agentName}:</b> ${firstQuestion}</p>`;
+    saveTranscriptLine(agentName, firstQuestion);
+    aiStatus.textContent = "Interview started";
+    aiStatusInline.textContent = "Interview started";
+    speakText(firstQuestion);
+    startRollingSummary();
+  }
+
+  async function refreshSummary() {
+    try {
+      const res = await fetch(`/meetings/${meetingId}/summary/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      summaryBox.innerHTML = `
+        <p><b>Summary:</b> ${data.summary || ""}</p>
+        <p><b>Key points:</b><br>${(data.key_points || "").replaceAll("\\n", "<br>")}</p>
+        <p><b>Action items:</b><br>${(data.action_items || "").replaceAll("\\n", "<br>")}</p>
+      `;
+    } catch (_) {}
+  }
+
+  function startRollingSummary() {
+    if (rollingSummaryTimer) return;
+    refreshSummary();
+    rollingSummaryTimer = setInterval(refreshSummary, 120000);
+  }
+
+  async function askMeetingMemory() {
+    const question = (qaQuestion.value || "").trim();
+    if (!question) return;
+    qaAnswer.innerHTML = "<p>Thinking...</p>";
+    try {
+      const res = await fetch(`/meetings/${meetingId}/qa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ question, top_k: 5 }),
+      });
+      if (!res.ok) throw new Error("Could not answer");
+      const data = await res.json();
+      qaAnswer.innerHTML = `<p><b>Answer:</b> ${data.answer}</p>`;
+    } catch (_) {
+      qaAnswer.innerHTML = "<p>Could not answer from current meeting memory yet.</p>";
+    }
+  }
+
+  function initSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      micState.textContent = "Speech recognition not supported in this browser";
+      micToggleBtn.disabled = true;
+      return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onstart = () => {
+      isListening = true;
+      micState.textContent = "Listening...";
+      micToggleBtn.textContent = "Stop Mic";
+    };
+
+    recognition.onend = () => {
+      isListening = false;
+      micState.textContent = "Mic off";
+      micToggleBtn.textContent = "Start Mic";
+    };
+
+    recognition.onerror = () => {
+      micState.textContent = "Mic error. Check microphone permissions.";
+    };
+
+    recognition.onresult = (event) => {
+      let interim = "";
+      let finalText = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const text = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalText += text + " ";
+        else interim += text;
+      }
+      liveText.textContent = interim ? `Listening: ${interim}` : "";
+      if (finalText.trim()) sendToAI(finalText.trim());
+    };
+  }
+
+  startInterviewBtn.addEventListener("click", startInterview);
+  toggleVoiceBtn.addEventListener("click", () => {
+    voiceEnabled = !voiceEnabled;
+    toggleVoiceBtn.textContent = `Voice: ${voiceEnabled ? "On" : "Off"}`;
+    if (!voiceEnabled && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  });
+
+  resetViewBtn.addEventListener("click", () => {
+    // Hard reset is the most reliable way to recover from Jitsi panel/pin UI traps.
+    const url = `${location.pathname}${location.search}`;
+    location.assign(url);
+  });
+  copyInviteBtn.addEventListener("click", async () => {
+    if (!guestInviteUrl || !guestInviteUrl.value) return;
+    try {
+      await navigator.clipboard.writeText(guestInviteUrl.value);
+      const original = copyInviteBtn.textContent;
+      copyInviteBtn.textContent = "Copied";
+      setTimeout(() => {
+        copyInviteBtn.textContent = original;
+      }, 1200);
+    } catch (_) {
+      guestInviteUrl.select();
+    }
+  });
+  micToggleBtn.addEventListener("click", () => {
+    if (!recognition) return;
+    if (isListening) recognition.stop();
+    else recognition.start();
+  });
+  sendChatBtn.addEventListener("click", () => {
+    sendToAI(chatInput.value);
+    chatInput.value = "";
+  });
+  chatInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    sendToAI(chatInput.value);
+    chatInput.value = "";
+  });
+  refreshSummaryBtn.addEventListener("click", refreshSummary);
+  qaAskBtn.addEventListener("click", askMeetingMemory);
+  initSpeechRecognition();
+
+  const api = new JitsiMeetExternalAPI("{{ jitsi_domain }}", {
+    roomName: "{{ meeting.jitsi_room_name }}",
+    width: "100%",
+    height: 500,
+    parentNode: document.querySelector("#jitsi-container"),
+    configOverwrite: {
+      prejoinConfig: { enabled: true },
+      startWithAudioMuted: false,
+      startWithVideoMuted: false
+    }
+  });
+  api.addListener("videoConferenceJoined", () => {
+    deviceStatus.textContent = "Joined meeting. Use toggles for camera/mic.";
+  });
+
+  async function enableDevices() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      deviceStatus.textContent = "Browser does not support camera/mic APIs";
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      stream.getTracks().forEach((track) => track.stop());
+      deviceStatus.textContent = "Camera/Mic permission granted";
+    } catch (_) {
+      deviceStatus.textContent = "Camera/Mic blocked. Allow permissions in browser settings.";
+    }
+  }
+  enableDevicesBtn.addEventListener("click", enableDevices);
+  toggleJitsiMicBtn.addEventListener("click", () => {
+    try { api.executeCommand("toggleAudio"); } catch (_) {}
+  });
+  toggleJitsiCamBtn.addEventListener("click", () => {
+    try { api.executeCommand("toggleVideo"); } catch (_) {}
+  });
+
+  // Hidden second participant: joins same room as an AI interviewer bot.
+  // This creates a real participant tile/icon in Jitsi without extra backend infra.
+  const botApi = new JitsiMeetExternalAPI("{{ jitsi_domain }}", {
+    roomName: "{{ meeting.jitsi_room_name }}",
+    width: 1,
+    height: 1,
+    parentNode: document.querySelector("#jitsi-bot-container"),
+    userInfo: { displayName: `${agentName} (AI)` },
+    configOverwrite: {
+      startWithAudioMuted: true,
+      startWithVideoMuted: true,
+      disableDeepLinking: true,
+      prejoinConfig: { enabled: false },
+      enableNoAudioDetection: false,
+      enableNoisyMicDetection: false
+    },
+    interfaceConfigOverwrite: {
+      TOOLBAR_BUTTONS: []
+    }
+  });
+
+  botApi.addListener("videoConferenceJoined", () => {
+    try {
+      botApi.executeCommand("displayName", `${agentName} (AI)`);
+      botApi.executeCommand("toggleAudio");
+      botApi.executeCommand("toggleVideo");
+      aiStatusInline.textContent = "Joined call";
+    } catch (_) {}
+  });
+</script>
+{% endblock %}

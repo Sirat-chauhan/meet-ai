@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="auth-split">
+  <article class="card auth-card auth-form-pane">
+    <h1 class="auth-title">Welcome back</h1>
+    <p class="auth-subtitle">Login to your account</p>
+    {% if request.query_params.get("error") %}
+      <p class="auth-error">{{ request.query_params.get("error") }}</p>
+    {% endif %}
+    <form method="post" class="stack auth-form">
+      <label class="auth-label">Email</label>
+      <input class="auth-input" name="email" type="email" placeholder="m@example.com" required>
+      <label class="auth-label">Password</label>
+      <input class="auth-input" name="password" type="password" placeholder="********" required>
+      <button class="auth-primary-btn" type="submit">Sign in</button>
+    </form>
+    {% if oauth_google_enabled or oauth_github_enabled %}
+      <p class="auth-divider">Or continue with</p>
+      <div class="stack" style="margin-top:12px;">
+        {% if oauth_google_enabled %}
+          <a class="secondary-btn auth-social-btn" href="/auth/oauth/google/start">G</a>
+        {% endif %}
+        {% if oauth_github_enabled %}
+          <a class="secondary-btn auth-social-btn" href="/auth/oauth/github/start">⌥</a>
+        {% endif %}
+      </div>
+    {% endif %}
+    <p class="auth-foot">Don't have an account? <a href="/signup">Sign up</a></p>
+  </article>
+  <article class="auth-brand-pane">
+    <div class="brand-logo">🎯</div>
+    <h3>Meet.AI</h3>
+    <p>AI-powered meetings with real-time intelligence</p>
+  </article>
+</section>
+{% endblock %}

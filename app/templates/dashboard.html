@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="topbar-lite">
+  <div class="search-wrap">
+    <span class="search-icon">⌕</span>
+    <input class="search" placeholder="Search">
+  </div>
+  <span class="shortcut-chip">⌘ K</span>
+  <a class="green-btn" href="/create-agent">+ New Meeting</a>
+</section>
+
+<section class="card">
+  <h2>My Meetings</h2>
+  <div class="filters-row">
+    <input id="meetingNameFilter" class="filter-input" placeholder="Filter by name">
+    <select id="meetingStatusFilter" class="filter-select">
+      <option value="all">Status</option>
+      <option value="completed">Completed</option>
+      <option value="active">Active</option>
+      <option value="pending">Pending</option>
+    </select>
+    <select id="meetingAgentFilter" class="filter-select">
+      <option value="all">Agent</option>
+      {% for agent in agents %}
+        <option value="{{ agent.name|lower }}">{{ agent.name }}</option>
+      {% endfor %}
+    </select>
+    <button id="meetingClearFilter" class="secondary-btn" type="button">Clear</button>
+  </div>
+
+  <div class="table-head">
+    <span>Meeting</span>
+    <span>Status</span>
+    <span>Duration</span>
+    <span>Action</span>
+  </div>
+
+  <div class="meeting-table" id="meetingTable">
+  {% if not meeting_rows %}
+    <p class="muted">No meetings yet. Create an agent and start one.</p>
+  {% endif %}
+  {% for row in meeting_rows %}
+    <div
+      class="meeting-row"
+      data-room="{{ row.room_id|lower }}"
+      data-status="{{ row.status|lower }}"
+      data-agent="{{ row.agent_name|lower }}"
+    >
+      <div>
+        <strong>{{ row.room_id }}</strong>
+        <p class="muted">{{ row.agent_name }}</p>
+      </div>
+      <div>
+        <span class="status-chip {% if row.status|lower == 'completed' %}ok{% elif row.status|lower == 'active' %}live{% else %}wait{% endif %}">
+          {{ row.status }}
+        </span>
+      </div>
+      <div class="muted">{{ row.duration }}</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <a class="row-link" href="/meeting/{{ row.id }}">Open</a>
+        <button
+          class="secondary-btn"
+          type="button"
+          data-invite-url="{{ row.guest_join_url }}"
+          onclick="copyInvite(this)"
+          style="padding:6px 10px;"
+        >
+          Copy Invite
+        </button>
+      </div>
+    </div>
+  {% endfor %}
+    <p id="meetingNoResult" class="muted" style="display:none;padding:14px;">No meetings match current filters.</p>
+  </div>
+</section>
+
+<section class="card">
+  <h3>Your Agents</h3>
+  {% if not agents %}
+    <p class="muted">No agents yet.</p>
+  {% endif %}
+  <ul class="clean-list">
+    {% for agent in agents %}
+      <li class="list-card">
+        <div>
+          <strong>{{ agent.name }}</strong>
+          <p class="muted">{{ agent.personality }}</p>
+        </div>
+        <a class="green-btn" href="/start-meeting/{{ agent.id }}">Start Meeting</a>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<script>
+  const meetingNameFilter = document.getElementById("meetingNameFilter");
+  const meetingStatusFilter = document.getElementById("meetingStatusFilter");
+  const meetingAgentFilter = document.getElementById("meetingAgentFilter");
+  const meetingClearFilter = document.getElementById("meetingClearFilter");
+  const meetingRows = Array.from(document.querySelectorAll(".meeting-row"));
+  const meetingNoResult = document.getElementById("meetingNoResult");
+
+  function applyMeetingFilters() {
+    const nameValue = (meetingNameFilter.value || "").trim().toLowerCase();
+    const statusValue = (meetingStatusFilter.value || "all").toLowerCase();
+    const agentValue = (meetingAgentFilter.value || "all").toLowerCase();
+
+    let visibleCount = 0;
+    for (const row of meetingRows) {
+      const room = row.dataset.room || "";
+      const status = row.dataset.status || "";
+      const agent = row.dataset.agent || "";
+
+      const matchesName = !nameValue || room.includes(nameValue);
+      const matchesStatus = statusValue === "all" || status === statusValue;
+      const matchesAgent = agentValue === "all" || agent === agentValue;
+      const visible = matchesName && matchesStatus && matchesAgent;
+
+      row.style.display = visible ? "" : "none";
+      if (visible) visibleCount += 1;
+    }
+
+    if (meetingNoResult) {
+      meetingNoResult.style.display = visibleCount === 0 && meetingRows.length > 0 ? "block" : "none";
+    }
+  }
+
+  meetingNameFilter?.addEventListener("input", applyMeetingFilters);
+  meetingStatusFilter?.addEventListener("change", applyMeetingFilters);
+  meetingAgentFilter?.addEventListener("change", applyMeetingFilters);
+  meetingClearFilter?.addEventListener("click", () => {
+    meetingNameFilter.value = "";
+    meetingStatusFilter.value = "all";
+    meetingAgentFilter.value = "all";
+    applyMeetingFilters();
+  });
+
+  async function copyInvite(btn) {
+    const url = btn.getAttribute("data-invite-url");
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      const original = btn.textContent;
+      btn.textContent = "Copied";
+      setTimeout(() => { btn.textContent = original; }, 1200);
+    } catch (_) {
+      prompt("Copy this invite link:", url);
+    }
+  }
+</script>
+{% endblock %}

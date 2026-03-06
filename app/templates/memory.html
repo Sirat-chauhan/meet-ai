@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="topbar-lite">
+  <div class="search-wrap">
+    <span class="search-icon">⌕</span>
+    <input class="search" placeholder="Search memory">
+  </div>
+  <span class="shortcut-chip">⌘ K</span>
+</section>
+
+<section class="card">
+  <h2>Ask Across Previous Meetings</h2>
+  <p class="muted">Select one meeting or search across all your meeting transcripts.</p>
+  <form method="post" action="/memory/ask" class="stack">
+    <label>Meeting Scope</label>
+    <select name="meeting_id">
+      <option value="all" {% if selected_meeting_id == 'all' %}selected{% endif %}>All meetings</option>
+      {% for m in meetings %}
+        <option value="{{ m.id }}" {% if selected_meeting_id == (m.id|string) %}selected{% endif %}>
+          {{ m.room_id }} ({{ m.status }})
+        </option>
+      {% endfor %}
+    </select>
+    <label>Question</label>
+    <textarea name="question" rows="3" placeholder="What did we decide about launch date?">{{ question }}</textarea>
+    <button type="submit">Ask AI</button>
+  </form>
+</section>
+
+<section class="grid-2">
+  <article class="card">
+    <h3>Answer</h3>
+    <div class="chat-box" style="min-height:160px;max-height:260px;">
+      {% if answer %}
+        <p>{{ answer }}</p>
+      {% else %}
+        <p class="muted">Ask a question to get an answer from your transcript memory.</p>
+      {% endif %}
+    </div>
+  </article>
+
+  <article class="card">
+    <h3>Context Used</h3>
+    <div class="chat-box" style="min-height:160px;max-height:260px;">
+      {% if context_used %}
+        <ul class="clean-list">
+          {% for row in context_used %}
+            <li>{{ row }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Top transcript matches will show here.</p>
+      {% endif %}
+    </div>
+  </article>
+</section>
+{% endblock %}

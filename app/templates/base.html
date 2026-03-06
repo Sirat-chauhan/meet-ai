@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meet AI</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260306-4">
+</head>
+<body>
+  {% set is_auth_page = request.url.path in ['/login', '/signup'] %}
+  {% set is_logged_in = request.cookies.get('user_id') and not is_auth_page %}
+  {% if is_logged_in %}
+  {% set user_email = user.email if user is defined and user else 'john.doe@test.com' %}
+  {% set user_initial = (user_email[0]|upper) if user_email else 'U' %}
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="logo" href="/dashboard">
+        <span class="logo-ring">◎</span>
+        <strong>Meet.AI</strong>
+      </a>
+      <nav class="menu">
+        <a class="{% if active_page == 'meetings' %}active{% endif %}" href="/dashboard">Meetings</a>
+        <a class="{% if active_page == 'agents' %}active{% endif %}" href="/create-agent">Agents</a>
+        <a class="{% if active_page == 'memory' %}active{% endif %}" href="/memory">Memory</a>
+        <a class="{% if active_page == 'upgrade' %}active{% endif %}" href="/upgrade">Upgrade</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="trial-card">
+          <div class="trial-head">
+            <p>Free Trial</p>
+          </div>
+          <small>10/10 Agents</small>
+          <div class="meter"><span style="width:100%"></span></div>
+          <small>9/10 Meetings</small>
+          <div class="meter"><span style="width:90%"></span></div>
+          <a href="/upgrade">Upgrade</a>
+        </div>
+        <div class="user-card">
+          <div class="user-avatar">{{ user_initial }}</div>
+          <div class="user-meta">
+            <strong>{{ user_email.split('@')[0]|replace('.', ' ')|title }}</strong>
+            <small>{{ user_email }}</small>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <section class="page">
+  {% else %}
+    <main class="auth-shell">
+  {% endif %}
+
+  {% block content %}{% endblock %}
+
+  {% if is_logged_in %}
+    </section>
+  </div>
+  {% else %}
+    </main>
+  {% endif %}
+</body>
+</html>
