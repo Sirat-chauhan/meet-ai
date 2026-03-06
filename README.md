@@ -1,6 +1,6 @@
 # Meet AI
 
-AI-powered meeting platform built with Python (FastAPI) and Jitsi, with OpenAI-based interviewer agents, transcripts, summaries, semantic search, and Razorpay billing scaffolding.
+AI-powered meeting platform built with Python (FastAPI) and Jitsi, with optional OpenAI intelligence, transcripts, summaries, semantic search, and Razorpay billing scaffolding.
 
 ## What is implemented
 - FastAPI backend with modular routers
@@ -91,29 +91,25 @@ alembic upgrade head
 celery -A workers.celery_app.celery worker -Q summaries --loglevel=info
 ```
 
-## Deploy without Docker (Render)
-This repo is ready for native Python deploy on Render using [`render.yaml`](./render.yaml).
+## Free deploy mode (single service)
+This repo is configured for a free single-service deployment (no managed Redis/Postgres/worker required) using [`render.yaml`](./render.yaml).
 
 ### Quick steps
 1. Push this repo to GitHub.
 2. In Render, create a new **Blueprint** and select this repo.
 3. Render will create:
    - `meetai-web` (FastAPI web service)
-   - `meetai-worker` (Celery worker)
-   - `meetai-postgres` (PostgreSQL)
-   - `meetai-redis` (Redis)
 4. Set required env vars in Render dashboard:
    - `APP_BASE_URL` = your Render web URL
-   - `FRONTEND_ORIGIN` = your frontend URL (or same as app URL if template-only)
+   - `FRONTEND_ORIGIN` = same Render web URL
    - `OPENAI_API_KEY` (if using OpenAI mode)
    - Optional: Razorpay/OAuth keys
 5. Deploy.
 
-### Start commands used
-- Web: `PYTHONPATH=. alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:$PORT app.main:app`
-- Worker: `celery -A workers.celery_app.celery worker -Q summaries --loglevel=info`
+### Start command used
+- Web: `PYTHONPATH=. gunicorn -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:$PORT app.main:app`
 
-You can reuse these from [`Procfile`](./Procfile) on other non-Docker platforms as well.
+You can reuse this from [`Procfile`](./Procfile) on other non-Docker platforms as well.
 
 ## How to test interview quickly
 1. Sign up and login at `/login`
@@ -135,6 +131,7 @@ You can reuse these from [`Procfile`](./Procfile) on other non-Docker platforms 
 ## Current limitation
 - The AI icon/tile in Jitsi is simulated via in-page/hidden client behavior.
 - A fully independent media-stream bot participant in Jitsi requires self-hosted Jitsi bot infrastructure.
+- Free single-service mode uses SQLite filesystem storage; data persistence may reset depending on host platform policy.
 
 ## Main API routes
 - `POST /auth/signup`

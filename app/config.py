@@ -15,7 +15,8 @@ class Settings:
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "120"))
 
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./ai_meeting.db")
-    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    redis_url: str = os.getenv("REDIS_URL", "")
+    use_worker: bool = os.getenv("USE_WORKER", "false").lower() == "true"
 
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_chat_model: str = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")

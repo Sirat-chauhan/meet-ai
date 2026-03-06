@@ -146,7 +146,7 @@ def end_meeting(
     db.add(meeting)
     db.commit()
 
-    if settings.redis_url:
+    if settings.use_worker and settings.redis_url:
         try:
             generate_meeting_summary_task.delay(meeting.id)
         except Exception:
