@@ -1,10 +1,33 @@
 import logging
 import smtplib
+import socket
 from email.message import EmailMessage
 
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class IPv4SMTP(smtplib.SMTP):
+    def _get_socket(self, host, port, timeout):
+        addresses = socket.getaddrinfo(host, port, family=socket.AF_INET, type=socket.SOCK_STREAM)
+        if not addresses:
+            return super()._get_socket(host, port, timeout)
+
+        last_error = None
+        for family, socktype, proto, _, sockaddr in addresses:
+            sock = socket.socket(family, socktype, proto)
+            sock.settimeout(timeout)
+            try:
+                sock.connect(sockaddr)
+                return sock
+            except OSError as exc:
+                last_error = exc
+                sock.close()
+
+        if last_error:
+            raise last_error
+        return super()._get_socket(host, port, timeout)
 
 
 def verification_url(token: str) -> str:
@@ -30,7 +53,7 @@ def send_verification_email(to_email: str, token: str) -> bool:
     )
 
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
+        with IPv4SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
             if settings.smtp_use_tls:
                 smtp.starttls()
             if settings.smtp_username:
