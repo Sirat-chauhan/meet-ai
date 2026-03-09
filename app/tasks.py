@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from .database import SessionLocal
 from .models import Meeting, MeetingSummary, Transcript
 from .services.ai_service import ai_service
-from workers.celery_app import celery
 
 
 def _build_transcript_text(db: Session, meeting_id: int) -> str:
@@ -38,8 +37,3 @@ def generate_meeting_summary(meeting_id: int) -> None:
         db.commit()
     finally:
         db.close()
-
-
-@celery.task(name="app.tasks.generate_meeting_summary_task")
-def generate_meeting_summary_task(meeting_id: int) -> None:
-    generate_meeting_summary(meeting_id)

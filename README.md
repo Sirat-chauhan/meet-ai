@@ -17,7 +17,7 @@ AI-powered meeting platform built with Python (FastAPI) and Jitsi, with optional
   - fallback mode records mic chunks and transcribes on server (`/transcripts/transcribe`)
   - AI responds by voice
 - Live transcript auto-save during interview
-- Post-meeting summary task (Celery-compatible, local fallback)
+- Post-meeting summary generation with in-app background tasks
 - Rolling in-meeting summary refresh (`/meetings/{id}/summary/refresh`)
 - Embedding-based transcript search
 - Live meeting Q&A from transcript memory (`/meetings/{id}/qa`)
@@ -31,7 +31,6 @@ AI-powered meeting platform built with Python (FastAPI) and Jitsi, with optional
 - Backend: FastAPI, SQLAlchemy, Jinja templates
 - Frontend: React (Vite) + meeting web page template
 - DB: SQLite (default local) or PostgreSQL
-- Queue: Celery + Redis (optional for local)
 - Video: Jitsi (`meet.jit.si`)
 - AI: OpenAI (chat, embeddings, whisper endpoint)
 
@@ -48,7 +47,6 @@ Important keys:
 - `FRONTEND_ORIGIN=http://localhost:5173`
 - `APP_BASE_URL`: must match the backend URL used in local/dev/prod so Supabase verification redirects back correctly
 - `SUPABASE_URL` + `SUPABASE_ANON_KEY`: enable Supabase Auth for signup/login/email verification
-- `SMTP_*`: optional legacy fallback only if you want to keep local email sending instead of Supabase Auth
 - `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`: enable Google OAuth login
 - `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET`: enable GitHub OAuth login
 
@@ -66,7 +64,7 @@ When Supabase Auth is configured:
 
 When Supabase Auth is not configured:
 - the app falls back to the older local auth flow
-- SMTP settings are required if you still want local email verification
+- email verification is not handled by Supabase, so production signup verification is not recommended in that mode
 
 ### OpenAI Mode (recommended)
 Set in `.env`:
@@ -117,11 +115,6 @@ alembic upgrade head
 
 Email verification fields were added in migration `20260309_01`, so run migrations if you already have an existing local DB. The local `users` table is still used even with Supabase Auth, because the app stores ownership and plan data there.
 
-## Optional worker (for background summaries)
-```bash
-celery -A workers.celery_app.celery worker -Q summaries --loglevel=info
-```
-
 ## Free deploy mode (single service)
 This repo is configured for a free single-service deployment (no managed Redis/Postgres/worker required) using [`render.yaml`](./render.yaml).
 
@@ -142,7 +135,7 @@ This repo is configured for a free single-service deployment (no managed Redis/P
 Supabase setup for Render:
 1. In Supabase Auth settings, set `Site URL` to your Render app URL.
 2. Add `https://your-app.onrender.com/login` to redirect URLs.
-3. Leave `SMTP_*` empty unless you intentionally want the legacy local email flow.
+3. No SMTP, Redis, or Celery setup is required for the current default deployment path.
 
 ### Start command used
 - Web: `PYTHONPATH=. gunicorn -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:$PORT app.main:app`

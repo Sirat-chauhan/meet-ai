@@ -20,7 +20,7 @@ from ..schemas import (
 )
 from ..services.ai_service import ai_service
 from ..services.subscription_service import subscription_service
-from ..tasks import generate_meeting_summary, generate_meeting_summary_task
+from ..tasks import generate_meeting_summary
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
@@ -146,14 +146,7 @@ def end_meeting(
     db.add(meeting)
     db.commit()
 
-    if settings.use_worker and settings.redis_url:
-        try:
-            generate_meeting_summary_task.delay(meeting.id)
-        except Exception:
-            # Local fallback when Redis/Celery isn't running.
-            background_tasks.add_task(generate_meeting_summary, meeting.id)
-    else:
-        background_tasks.add_task(generate_meeting_summary, meeting.id)
+    background_tasks.add_task(generate_meeting_summary, meeting.id)
 
     db.refresh(meeting)
     return meeting

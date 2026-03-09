@@ -255,11 +255,6 @@ Meet AI is a FastAPI-based meeting platform with:
   - Pricing cards and Razorpay checkout JS integration.
   - Includes payment verification callback path.
 
-### Worker
-- `workers/celery_app.py`
-  - Creates real Celery app when dependency exists.
-  - Provides inline fake-task fallback when Celery unavailable, preserving `.delay()` calls.
-
 ### React Frontend (`frontend/`)
 - `frontend/package.json`
   - Vite + React project scripts and dependency declarations.
@@ -330,4 +325,3 @@ Meet AI is a FastAPI-based meeting platform with:
 3. Add automated tests for auth, meeting lifecycle, transcript embedding/search, and billing verification.
 4. Wire React frontend to real backend APIs (or remove prototype to avoid drift).
 5. Add rate limiting and stronger cookie security for production (`secure`, stricter `samesite` where applicable).
-

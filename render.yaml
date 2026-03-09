@@ -14,10 +14,6 @@ services:
         value: "true"
       - key: DATABASE_URL
         value: sqlite:///./ai_meeting_v2.db
-      - key: REDIS_URL
-        value: ""
-      - key: USE_WORKER
-        value: "false"
       - key: JITSI_DOMAIN
         value: meet.jit.si
       - key: APP_BASE_URL
