@@ -5,19 +5,24 @@ AI-powered meeting platform built with Python (FastAPI) and Jitsi, with optional
 ## What is implemented
 - FastAPI backend with modular routers
 - JWT auth + web cookie auth
+- Sidebar logout (`/logout`) that clears auth cookies
 - Agent creation (behavior, personality, interview script)
 - Meeting creation and Jitsi room embedding
 - AI interviewer presence in meeting page
 - Voice interview mode:
   - AI asks question by voice
   - user answers by mic
-  - speech is transcribed in browser and sent to AI
+  - primary mode uses browser speech recognition
+  - fallback mode records mic chunks and transcribes on server (`/transcripts/transcribe`)
   - AI responds by voice
 - Live transcript auto-save during interview
 - Post-meeting summary task (Celery-compatible, local fallback)
 - Rolling in-meeting summary refresh (`/meetings/{id}/summary/refresh`)
 - Embedding-based transcript search
 - Live meeting Q&A from transcript memory (`/meetings/{id}/qa`)
+- In-meeting transcript filter/search bar (toolbar search)
+- Memory page shows transcript-line counts per meeting and warns when selected meeting has no transcript data
+- Memory Q&A fallback can answer from recent transcript text when embedding rows are unavailable
 - Razorpay webhook scaffolding and plan model
 - React frontend scaffold (`frontend/`) for API-driven flow
 
@@ -40,6 +45,10 @@ Important keys:
 - `DATABASE_URL`: default local is SQLite (`sqlite:///./ai_meeting_v2.db`)
 - `AUTO_CREATE_TABLES=true`: easiest local mode
 - `FRONTEND_ORIGIN=http://localhost:5173`
+- `APP_BASE_URL`: must match backend URL/port used in local run (for email verification links)
+- `SMTP_*`: required for signup email verification (see `.env.example`)
+- `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`: enable Google OAuth login
+- `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET`: enable GitHub OAuth login
 
 ### OpenAI Mode (recommended)
 Set in `.env`:
@@ -64,12 +73,14 @@ Razorpay keys (only if testing billing):
 cd /home/user/Desktop/ai_meeting_platform
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 Open:
-- `http://localhost:8000/health`
-- `http://localhost:8000/login`
+- `http://localhost:8001/health`
+- `http://localhost:8001/login`
+
+Important: set `APP_BASE_URL=http://localhost:8001` in `.env` when running on port `8001`, otherwise verification links will point to the wrong port.
 
 ## Optional React frontend
 ```bash
@@ -85,6 +96,8 @@ Open: `http://localhost:5173`
 ```bash
 alembic upgrade head
 ```
+
+Email verification fields were added in migration `20260309_01`, so run migrations if you already have an existing local DB.
 
 ## Optional worker (for background summaries)
 ```bash
@@ -117,10 +130,13 @@ You can reuse this from [`Procfile`](./Procfile) on other non-Docker platforms a
 3. Start meeting from dashboard
 4. Click `Start Interview`
 5. Click `Start Mic` and speak
-6. AI asks/replies by voice
-7. Check transcript list (auto-saves both sides)
-8. Click `Refresh Now` under Rolling Summary
-9. Ask a question in `Ask Meeting Memory`
+6. Watch mic state text (`Listening...` or fallback transcription mode)
+7. AI asks/replies by voice
+8. Use top toolbar search in meeting page to filter transcript lines
+9. Use sidebar `Logout` to sign out
+10. Check transcript list (auto-saves both sides)
+11. Click `Refresh Now` under Rolling Summary
+12. Ask a question in `Ask Meeting Memory`
 
 ## Verify OpenAI is active
 1. Set `OPENAI_API_KEY` in `.env`
@@ -137,6 +153,7 @@ You can reuse this from [`Procfile`](./Procfile) on other non-Docker platforms a
 - `POST /auth/signup`
 - `POST /auth/login`
 - `GET /auth/me`
+- `GET /logout`
 - `POST /agents`
 - `GET /agents`
 - `POST /meetings`
