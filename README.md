@@ -1,10 +1,11 @@
 # Meet AI
 
-AI-powered meeting platform built with Python (FastAPI) and Jitsi, with optional OpenAI intelligence, transcripts, summaries, semantic search, and Razorpay billing scaffolding.
+AI-powered meeting platform built with Python (FastAPI) and Jitsi, with optional OpenAI intelligence, Supabase-backed email verification auth, transcripts, summaries, semantic search, and Razorpay billing scaffolding.
 
 ## What is implemented
 - FastAPI backend with modular routers
-- JWT auth + web cookie auth
+- Supabase Auth-backed email/password verification with local user sync
+- JWT/web cookie fallback auth when Supabase Auth is not configured
 - Sidebar logout (`/logout`) that clears auth cookies
 - Agent creation (behavior, personality, interview script)
 - Meeting creation and Jitsi room embedding
@@ -45,10 +46,27 @@ Important keys:
 - `DATABASE_URL`: default local is SQLite (`sqlite:///./ai_meeting_v2.db`)
 - `AUTO_CREATE_TABLES=true`: easiest local mode
 - `FRONTEND_ORIGIN=http://localhost:5173`
-- `APP_BASE_URL`: must match backend URL/port used in local run (for email verification links)
-- `SMTP_*`: required for signup email verification (see `.env.example`)
+- `APP_BASE_URL`: must match the backend URL used in local/dev/prod so Supabase verification redirects back correctly
+- `SUPABASE_URL` + `SUPABASE_ANON_KEY`: enable Supabase Auth for signup/login/email verification
+- `SMTP_*`: optional legacy fallback only if you want to keep local email sending instead of Supabase Auth
 - `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`: enable Google OAuth login
 - `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET`: enable GitHub OAuth login
+
+### Auth mode
+Recommended:
+- Set `SUPABASE_URL`
+- Set `SUPABASE_ANON_KEY`
+- In Supabase Auth settings, set `Site URL` to your app URL
+- Add `/login` on your app URL to Supabase redirect URLs
+
+When Supabase Auth is configured:
+- sign up and login use Supabase Auth
+- verification emails are sent by Supabase
+- the app still syncs a local `users` row for meetings, agents, billing, and ownership
+
+When Supabase Auth is not configured:
+- the app falls back to the older local auth flow
+- SMTP settings are required if you still want local email verification
 
 ### OpenAI Mode (recommended)
 Set in `.env`:
@@ -80,7 +98,7 @@ Open:
 - `http://localhost:8001/health`
 - `http://localhost:8001/login`
 
-Important: set `APP_BASE_URL=http://localhost:8001` in `.env` when running on port `8001`, otherwise verification links will point to the wrong port.
+Important: set `APP_BASE_URL=http://localhost:8001` in `.env` when running on port `8001`, and add `http://localhost:8001/login` to Supabase Auth redirect URLs if you are testing email verification locally.
 
 ## Optional React frontend
 ```bash
@@ -97,7 +115,7 @@ Open: `http://localhost:5173`
 alembic upgrade head
 ```
 
-Email verification fields were added in migration `20260309_01`, so run migrations if you already have an existing local DB.
+Email verification fields were added in migration `20260309_01`, so run migrations if you already have an existing local DB. The local `users` table is still used even with Supabase Auth, because the app stores ownership and plan data there.
 
 ## Optional worker (for background summaries)
 ```bash
@@ -115,9 +133,16 @@ This repo is configured for a free single-service deployment (no managed Redis/P
 4. Set required env vars in Render dashboard:
    - `APP_BASE_URL` = your Render web URL
    - `FRONTEND_ORIGIN` = same Render web URL
+   - `SUPABASE_URL` = your Supabase project URL
+   - `SUPABASE_ANON_KEY` = your Supabase anon key
    - `OPENAI_API_KEY` (if using OpenAI mode)
    - Optional: Razorpay/OAuth keys
 5. Deploy.
+
+Supabase setup for Render:
+1. In Supabase Auth settings, set `Site URL` to your Render app URL.
+2. Add `https://your-app.onrender.com/login` to redirect URLs.
+3. Leave `SMTP_*` empty unless you intentionally want the legacy local email flow.
 
 ### Start command used
 - Web: `PYTHONPATH=. gunicorn -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:$PORT app.main:app`

@@ -8,7 +8,7 @@
 </head>
 <body>
   {% set is_auth_page = request.url.path in ['/login', '/signup'] %}
-  {% set is_logged_in = request.cookies.get('user_id') and not is_auth_page %}
+  {% set is_logged_in = request.cookies.get('access_token') and not is_auth_page %}
   {% if is_logged_in %}
   {% set user_email = user.email if user is defined and user else 'john.doe@test.com' %}
   {% set user_initial = (user_email[0]|upper) if user_email else 'U' %}

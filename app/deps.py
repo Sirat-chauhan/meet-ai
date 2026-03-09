@@ -5,6 +5,12 @@ from sqlalchemy.orm import Session
 from .database import SessionLocal
 from .models import User
 from .security import decode_access_token, is_jwt_error
+from .services.supabase_auth_service import (
+    SupabaseAuthError,
+    get_user as get_supabase_user,
+    is_supabase_auth_enabled,
+    sync_local_user,
+)
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
@@ -40,6 +46,13 @@ def get_current_user(
     token = _extract_token_from_request(request) or token_from_oauth
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    if is_supabase_auth_enabled():
+        try:
+            auth_user = get_supabase_user(token)
+            return sync_local_user(db, auth_user)
+        except SupabaseAuthError as exc:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=exc.message) from exc
 
     try:
         payload = decode_access_token(token)

@@ -19,6 +19,14 @@ from ..config import settings
 from ..services.email_service import send_verification_email
 from ..services.ai_service import ai_service
 from ..services.subscription_service import subscription_service
+from ..services.supabase_auth_service import (
+    SupabaseAuthError,
+    get_user as get_supabase_user,
+    is_supabase_auth_enabled,
+    sign_in_with_password,
+    sign_up as supabase_sign_up,
+    sync_local_user,
+)
 
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
@@ -36,14 +44,25 @@ def _oauth_enabled(client_id: str, client_secret: str) -> bool:
 
 
 def _current_user_from_cookie(request: Request, db: Session) -> User | None:
+    cookie_token = request.cookies.get("access_token")
+    if cookie_token:
+        if cookie_token.lower().startswith("bearer "):
+            cookie_token = cookie_token.split(" ", 1)[1]
+        if is_supabase_auth_enabled():
+            try:
+                auth_user = get_supabase_user(cookie_token)
+                return sync_local_user(db, auth_user)
+            except SupabaseAuthError:
+                return None
+
     user_id = request.cookies.get("user_id")
     if not user_id:
         return None
     return db.query(User).filter(User.id == int(user_id)).first()
 
 
-def _login_redirect_for_user(user: User) -> RedirectResponse:
-    token = create_access_token({"sub": str(user.id), "email": user.email})
+def _login_redirect_for_user(user: User, access_token: str | None = None) -> RedirectResponse:
+    token = access_token or create_access_token({"sub": str(user.id), "email": user.email})
     response = RedirectResponse("/dashboard", status_code=302)
     response.set_cookie("user_id", str(user.id), httponly=True)
     response.set_cookie("access_token", f"Bearer {token}", httponly=True)
@@ -103,6 +122,20 @@ def signup(
     db: Session = Depends(get_db),
 ):
     normalized_email = (email or "").strip().lower()
+    if is_supabase_auth_enabled():
+        redirect_to = f"{settings.app_base_url.rstrip('/')}/login?message={quote_plus('Email verified. You can log in now.')}"
+        try:
+            auth_response = supabase_sign_up(normalized_email, password, email_redirect_to=redirect_to)
+            auth_user = auth_response.get("user") or {"email": normalized_email}
+            sync_local_user(db, auth_user)
+            return RedirectResponse(
+                "/login?message=Check+your+email+to+verify+your+account+before+logging+in.",
+                status_code=302,
+            )
+        except SupabaseAuthError as exc:
+            message = quote_plus(exc.message)
+            return RedirectResponse(f"/signup?error={message}", status_code=302)
+
     existing = db.query(User).filter(User.email == normalized_email).first()
     if existing:
         if not existing.email_verified:
@@ -148,6 +181,20 @@ def login(
     db: Session = Depends(get_db),
 ):
     normalized_email = (email or "").strip().lower()
+    if is_supabase_auth_enabled():
+        try:
+            auth_response = sign_in_with_password(normalized_email, password)
+            auth_user = auth_response.get("user") or {}
+            user = sync_local_user(db, auth_user)
+            return _login_redirect_for_user(user, access_token=auth_response["access_token"])
+        except SupabaseAuthError as exc:
+            message = exc.message
+            if "email not confirmed" in message.lower():
+                message = "Please verify your email before logging in."
+            elif "invalid login credentials" in message.lower():
+                message = "Invalid credentials"
+            return RedirectResponse(f"/login?error={quote_plus(message)}", status_code=302)
+
     user = db.query(User).filter(User.email == normalized_email).first()
     if not user or not verify_password(password, user.password_hash):
         return RedirectResponse("/login?error=Invalid+credentials", status_code=302)
@@ -237,6 +284,9 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
 
 @router.get("/verify-email")
 def verify_email(token: str, db: Session = Depends(get_db)):
+    if is_supabase_auth_enabled():
+        return RedirectResponse("/login?message=Email+verified.+You+can+log+in+now.", status_code=302)
+
     user = db.query(User).filter(User.email_verification_token == token).first()
     if not user:
         return RedirectResponse("/login?error=Invalid+or+expired+verification+link.", status_code=302)

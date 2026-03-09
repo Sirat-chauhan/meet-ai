@@ -7,6 +7,9 @@
     {% if request.query_params.get("error") %}
       <p class="auth-error">{{ request.query_params.get("error") }}</p>
     {% endif %}
+    {% if request.query_params.get("message") %}
+      <p class="auth-error" style="background:#ecfdf3;color:#166534;border-color:#bbf7d0;">{{ request.query_params.get("message") }}</p>
+    {% endif %}
     <form method="post" class="stack auth-form">
       <label class="auth-label">Email</label>
       <input class="auth-input" name="email" type="email" placeholder="m@example.com" required>
