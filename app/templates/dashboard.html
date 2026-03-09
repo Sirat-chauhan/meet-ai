@@ -3,7 +3,7 @@
 <section class="topbar-lite">
   <div class="search-wrap">
     <span class="search-icon">⌕</span>
-    <input class="search" placeholder="Search">
+    <input id="topSearchInput" class="search" placeholder="Search by meeting, agent, or status">
   </div>
   <span class="shortcut-chip">⌘ K</span>
   <a class="green-btn" href="/create-agent">+ New Meeting</a>
@@ -97,6 +97,7 @@
   const meetingStatusFilter = document.getElementById("meetingStatusFilter");
   const meetingAgentFilter = document.getElementById("meetingAgentFilter");
   const meetingClearFilter = document.getElementById("meetingClearFilter");
+  const topSearchInput = document.getElementById("topSearchInput");
   const meetingRows = Array.from(document.querySelectorAll(".meeting-row"));
   const meetingNoResult = document.getElementById("meetingNoResult");
 
@@ -104,6 +105,7 @@
     const nameValue = (meetingNameFilter.value || "").trim().toLowerCase();
     const statusValue = (meetingStatusFilter.value || "all").toLowerCase();
     const agentValue = (meetingAgentFilter.value || "all").toLowerCase();
+    const topSearchValue = (topSearchInput?.value || "").trim().toLowerCase();
 
     let visibleCount = 0;
     for (const row of meetingRows) {
@@ -114,7 +116,8 @@
       const matchesName = !nameValue || room.includes(nameValue);
       const matchesStatus = statusValue === "all" || status === statusValue;
       const matchesAgent = agentValue === "all" || agent === agentValue;
-      const visible = matchesName && matchesStatus && matchesAgent;
+      const matchesTopSearch = !topSearchValue || room.includes(topSearchValue) || status.includes(topSearchValue) || agent.includes(topSearchValue);
+      const visible = matchesName && matchesStatus && matchesAgent && matchesTopSearch;
 
       row.style.display = visible ? "" : "none";
       if (visible) visibleCount += 1;
@@ -128,10 +131,19 @@
   meetingNameFilter?.addEventListener("input", applyMeetingFilters);
   meetingStatusFilter?.addEventListener("change", applyMeetingFilters);
   meetingAgentFilter?.addEventListener("change", applyMeetingFilters);
+  topSearchInput?.addEventListener("input", applyMeetingFilters);
+  window.addEventListener("keydown", (event) => {
+    const isShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
+    if (!isShortcut || !topSearchInput) return;
+    event.preventDefault();
+    topSearchInput.focus();
+    topSearchInput.select();
+  });
   meetingClearFilter?.addEventListener("click", () => {
     meetingNameFilter.value = "";
     meetingStatusFilter.value = "all";
     meetingAgentFilter.value = "all";
+    if (topSearchInput) topSearchInput.value = "";
     applyMeetingFilters();
   });
 

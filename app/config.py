@@ -41,5 +41,12 @@ class Settings:
     github_client_id: str = os.getenv("GITHUB_CLIENT_ID", "")
     github_client_secret: str = os.getenv("GITHUB_CLIENT_SECRET", "")
 
+    smtp_host: str = os.getenv("SMTP_HOST", "")
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username: str = os.getenv("SMTP_USERNAME", "")
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+    smtp_from_email: str = os.getenv("SMTP_FROM_EMAIL", "")
+    smtp_use_tls: bool = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+
 
 settings = Settings()

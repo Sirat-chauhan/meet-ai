@@ -2,19 +2,21 @@ import uuid
 import secrets
 import json
 from urllib.parse import quote_plus
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi import HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
 
 from ..deps import get_db
 from ..models import Agent, Meeting, Subscription, Transcript, TranscriptEmbedding, User
 from ..oauth import oauth
 from ..security import create_access_token, hash_password, verify_password
 from ..config import settings
+from ..services.email_service import send_verification_email
 from ..services.ai_service import ai_service
 from ..services.subscription_service import subscription_service
 
@@ -61,6 +63,21 @@ def _guest_join_url(request: Request, invite_token: str | None) -> str:
     return str(request.url_for("guest_meeting_page", invite_token=quote_plus(invite_token)))
 
 
+def _new_email_verification_token() -> str:
+    return secrets.token_urlsafe(36)
+
+
+def _transcript_counts_by_meeting(db: Session, user_id: int) -> dict[int, int]:
+    rows = (
+        db.query(Transcript.meeting_id, func.count(Transcript.id))
+        .join(Meeting, Meeting.id == Transcript.meeting_id)
+        .filter(Meeting.user_id == user_id)
+        .group_by(Transcript.meeting_id)
+        .all()
+    )
+    return {meeting_id: int(count) for meeting_id, count in rows}
+
+
 @router.get("/", response_class=HTMLResponse)
 def root(request: Request):
     return RedirectResponse("/login", status_code=302)
@@ -80,18 +97,36 @@ def signup_page(request: Request):
 
 @router.post("/signup")
 def signup(
+    background_tasks: BackgroundTasks,
     email: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    existing = db.query(User).filter(User.email == email).first()
+    normalized_email = (email or "").strip().lower()
+    existing = db.query(User).filter(User.email == normalized_email).first()
     if existing:
-        return RedirectResponse("/signup", status_code=302)
+        if not existing.email_verified:
+            existing.email_verification_token = _new_email_verification_token()
+            db.add(existing)
+            db.commit()
+            background_tasks.add_task(send_verification_email, existing.email, existing.email_verification_token)
+            return RedirectResponse(
+                "/login?error=Email+already+registered.+Verification+email+resent.+Please+verify+and+log+in.",
+                status_code=302,
+            )
+        return RedirectResponse("/login?error=Email+already+registered.+Please+log+in.", status_code=302)
 
-    user = User(email=email, password_hash=hash_password(password))
+    token = _new_email_verification_token()
+    user = User(
+        email=normalized_email,
+        password_hash=hash_password(password),
+        email_verified=False,
+        email_verification_token=token,
+    )
     db.add(user)
     db.commit()
-    return RedirectResponse("/login", status_code=302)
+    background_tasks.add_task(send_verification_email, normalized_email, token)
+    return RedirectResponse("/login?error=Please+verify+your+email+before+logging+in.", status_code=302)
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -112,11 +147,22 @@ def login(
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.email == email).first()
+    normalized_email = (email or "").strip().lower()
+    user = db.query(User).filter(User.email == normalized_email).first()
     if not user or not verify_password(password, user.password_hash):
-        return RedirectResponse("/login", status_code=302)
+        return RedirectResponse("/login?error=Invalid+credentials", status_code=302)
+    if not user.email_verified:
+        return RedirectResponse("/login?error=Please+verify+your+email+before+logging+in.", status_code=302)
 
     return _login_redirect_for_user(user)
+
+
+@router.get("/logout")
+def logout():
+    response = RedirectResponse("/login", status_code=302)
+    response.delete_cookie("user_id")
+    response.delete_cookie("access_token")
+    return response
 
 
 @router.get("/auth/oauth/{provider}/start")
@@ -167,15 +213,38 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
 
     if not email:
         return RedirectResponse("/login?error=Could+not+read+email+from+provider", status_code=302)
+    email = email.strip().lower()
 
     user = db.query(User).filter(User.email == email).first()
     if not user:
-        user = User(email=email, password_hash=hash_password(secrets.token_urlsafe(32)))
+        user = User(
+            email=email,
+            password_hash=hash_password(secrets.token_urlsafe(32)),
+            email_verified=True,
+            email_verification_token=None,
+        )
         db.add(user)
         db.commit()
         db.refresh(user)
+    elif not user.email_verified:
+        user.email_verified = True
+        user.email_verification_token = None
+        db.add(user)
+        db.commit()
 
     return _login_redirect_for_user(user)
+
+
+@router.get("/verify-email")
+def verify_email(token: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email_verification_token == token).first()
+    if not user:
+        return RedirectResponse("/login?error=Invalid+or+expired+verification+link.", status_code=302)
+    user.email_verified = True
+    user.email_verification_token = None
+    db.add(user)
+    db.commit()
+    return RedirectResponse("/login?error=Email+verified.+You+can+log+in+now.", status_code=302)
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -189,8 +258,12 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     agent_map = {agent.id: agent.name for agent in agents}
     meeting_rows = []
     updated_tokens = False
+    updated_status = False
     for meeting in meetings:
         updated_tokens = _ensure_meeting_invite_token(meeting) or updated_tokens
+        if meeting.ended_at and meeting.status != "completed":
+            meeting.status = "completed"
+            updated_status = True
         duration = "0 minutes"
         if meeting.started_at and meeting.ended_at:
             mins = max(int((meeting.ended_at - meeting.started_at).total_seconds() // 60), 1)
@@ -208,7 +281,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
                 "guest_join_url": _guest_join_url(request, meeting.guest_invite_token),
             }
         )
-    if updated_tokens:
+    if updated_tokens or updated_status:
         db.commit()
     return templates.TemplateResponse(
         "dashboard.html",
@@ -235,6 +308,7 @@ def memory_page(request: Request, db: Session = Depends(get_db)):
         .order_by(Meeting.created_at.desc())
         .all()
     )
+    transcript_counts = _transcript_counts_by_meeting(db, user.id)
     return templates.TemplateResponse(
         "memory.html",
         {
@@ -242,7 +316,9 @@ def memory_page(request: Request, db: Session = Depends(get_db)):
             "user": user,
             "active_page": "memory",
             "meetings": meetings,
+            "transcript_counts": transcript_counts,
             "selected_meeting_id": "all",
+            "selected_transcript_count": sum(transcript_counts.values()),
             "question": "",
             "answer": "",
             "context_used": [],
@@ -267,6 +343,7 @@ def memory_ask(
         .order_by(Meeting.created_at.desc())
         .all()
     )
+    transcript_counts = _transcript_counts_by_meeting(db, user.id)
 
     normalized_question = (question or "").strip()
     if not normalized_question:
@@ -277,7 +354,12 @@ def memory_ask(
                 "user": user,
                 "active_page": "memory",
                 "meetings": meetings,
+                "transcript_counts": transcript_counts,
                 "selected_meeting_id": meeting_id,
+                "selected_transcript_count": (
+                    sum(transcript_counts.values()) if meeting_id == "all" else transcript_counts.get(int(meeting_id), 0)
+                    if meeting_id.isdigit() else 0
+                ),
                 "question": normalized_question,
                 "answer": "Please enter a question.",
                 "context_used": [],
@@ -309,10 +391,40 @@ def memory_ask(
         context_text = f"{meeting.room_id} | {transcript.speaker}: {transcript.text}"
         ranked.append((score, context_text, transcript.text))
 
-    ranked.sort(key=lambda item: item[0], reverse=True)
-    best_context_texts = [item[2] for item in ranked[:5]]
-    answer = ai_service.answer_from_context(normalized_question, best_context_texts)
-    context_used = [item[1] for item in ranked[:5]]
+    if ranked:
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        best_context_texts = [item[2] for item in ranked[:5]]
+        answer = ai_service.answer_from_context(normalized_question, best_context_texts)
+        context_used = [item[1] for item in ranked[:5]]
+    else:
+        # Fallback for meetings that have transcripts but no embedding rows yet.
+        transcript_query = (
+            db.query(Transcript, Meeting)
+            .join(Meeting, Meeting.id == Transcript.meeting_id)
+            .filter(Meeting.user_id == user.id)
+        )
+        if selected_meeting_id is not None:
+            transcript_query = transcript_query.filter(Transcript.meeting_id == selected_meeting_id)
+        transcript_rows = transcript_query.order_by(Transcript.timestamp.desc()).limit(20).all()
+        if transcript_rows:
+            context_used = [
+                f"{meeting.room_id} | {transcript.speaker}: {transcript.text}"
+                for transcript, meeting in transcript_rows[:5]
+            ]
+            answer = ai_service.answer_from_context(
+                normalized_question,
+                [transcript.text for transcript, _ in transcript_rows[:5]],
+            )
+        else:
+            scope = "selected meeting" if selected_meeting_id is not None else "all meetings"
+            answer = f"No transcripts found for the {scope}. Record a meeting first or choose a meeting with transcripts."
+            context_used = []
+
+    selected_transcript_count = (
+        sum(transcript_counts.values())
+        if selected_meeting_id is None
+        else transcript_counts.get(selected_meeting_id, 0)
+    )
 
     return templates.TemplateResponse(
         "memory.html",
@@ -321,7 +433,9 @@ def memory_ask(
             "user": user,
             "active_page": "memory",
             "meetings": meetings,
+            "transcript_counts": transcript_counts,
             "selected_meeting_id": meeting_id,
+            "selected_transcript_count": selected_transcript_count,
             "question": normalized_question,
             "answer": answer,
             "context_used": context_used,

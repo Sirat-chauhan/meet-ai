@@ -5,10 +5,12 @@
     <div class="meeting-live-menu">☰</div>
     <div class="meeting-live-search">
       <span>⌕</span>
-      <input placeholder="Search..." />
+      <input id="liveSearchInput" placeholder="Search transcripts..." />
+      <button id="liveSearchBtn" type="button">Search</button>
       <kbd>⌘K</kbd>
     </div>
     <a class="meeting-live-link" href="/dashboard">Back</a>
+    <button id="endMeetingBtn" type="button">End Meeting</button>
     <button id="copyInviteBtn" type="button">Copy Invite Link</button>
     <button id="resetViewBtn" type="button">Reset View</button>
     <input id="guestInviteUrl" type="text" value="{{ guest_join_url }}" readonly class="meeting-live-hidden-url">
@@ -109,7 +111,10 @@
   const micState = document.getElementById("micState");
   const resetViewBtn = document.getElementById("resetViewBtn");
   const copyInviteBtn = document.getElementById("copyInviteBtn");
+  const endMeetingBtn = document.getElementById("endMeetingBtn");
   const guestInviteUrl = document.getElementById("guestInviteUrl");
+  const liveSearchInput = document.getElementById("liveSearchInput");
+  const liveSearchBtn = document.getElementById("liveSearchBtn");
   const enableDevicesBtn = document.getElementById("enableDevicesBtn");
   const toggleJitsiMicBtn = document.getElementById("toggleJitsiMicBtn");
   const toggleJitsiCamBtn = document.getElementById("toggleJitsiCamBtn");
@@ -119,6 +124,13 @@
   let voiceEnabled = true;
   let interviewStarted = false;
   let isListening = false;
+  let shouldListen = false;
+  let speechFallbackMode = false;
+  let mediaRecorder = null;
+  let mediaStream = null;
+  let recognitionErrorCount = 0;
+  let lastTranscriptAt = 0;
+  let meetingEnded = false;
   let recognition = null;
   let rollingSummaryTimer = null;
 
@@ -165,7 +177,7 @@
       chatBox.innerHTML += "<p><b>System:</b> Chat connection is not ready. Reload page.</p>";
       return;
     }
-    socket.send(message);
+    socket.send(normalized);
     chatBox.innerHTML += `<p><b>You:</b> ${normalized}</p>`;
     chatBox.scrollTop = chatBox.scrollHeight;
     saveTranscriptLine("candidate", normalized);
@@ -218,6 +230,96 @@
     rollingSummaryTimer = setInterval(refreshSummary, 120000);
   }
 
+  async function transcribeAudioChunk(blob) {
+    if (!blob || blob.size === 0) return;
+    const form = new FormData();
+    form.append("speaker", "candidate");
+    form.append("audio", blob, "speech.webm");
+    try {
+      const res = await fetch(`/meetings/${meetingId}/transcripts/transcribe`, {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      });
+      if (!res.ok) {
+        let detail = "Transcription failed";
+        try {
+          const err = await res.json();
+          detail = err?.detail || detail;
+        } catch (_) {}
+        micState.textContent = `Mic error: ${detail}`;
+        return;
+      }
+      const data = await res.json();
+      const text = (data?.text || "").trim();
+      if (!text) return;
+      lastTranscriptAt = Date.now();
+      sendToAI(text);
+    } catch (_) {}
+  }
+
+  async function startFallbackListening() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+      micState.textContent = "Mic recording is not supported in this browser";
+      return;
+    }
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(mediaStream);
+      mediaRecorder.ondataavailable = (event) => {
+        transcribeAudioChunk(event.data);
+      };
+      mediaRecorder.onstop = () => {
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+        }
+        mediaStream = null;
+        mediaRecorder = null;
+      };
+      mediaRecorder.start(3500);
+      isListening = true;
+      shouldListen = true;
+      micState.textContent = "Listening (fallback transcription)...";
+      micToggleBtn.textContent = "Stop Mic";
+    } catch (_) {
+      micState.textContent = "Microphone permission denied.";
+    }
+  }
+
+  function stopFallbackListening() {
+    shouldListen = false;
+    isListening = false;
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      try { mediaRecorder.stop(); } catch (_) {}
+    }
+    if (mediaStream) {
+      mediaStream.getTracks().forEach((track) => track.stop());
+      mediaStream = null;
+    }
+    mediaRecorder = null;
+    micState.textContent = "Mic off";
+    micToggleBtn.textContent = "Start Mic";
+  }
+
+  function applyLiveSearch() {
+    const query = (liveSearchInput?.value || "").trim().toLowerCase();
+    const rows = Array.from(transcriptList.querySelectorAll("li"));
+    let visibleCount = 0;
+    rows.forEach((row) => {
+      const text = (row.textContent || "").toLowerCase();
+      const visible = !query || text.includes(query);
+      row.style.display = visible ? "" : "none";
+      if (visible) visibleCount += 1;
+    });
+    if (!query) {
+      liveText.textContent = "";
+      return;
+    }
+    liveText.textContent = visibleCount > 0
+      ? `Found ${visibleCount} transcript line${visibleCount === 1 ? "" : "s"}`
+      : "No transcript lines matched your search.";
+  }
+
   async function askMeetingMemory() {
     const question = (qaQuestion.value || "").trim();
     if (!question) return;
@@ -240,8 +342,8 @@
   function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      micState.textContent = "Speech recognition not supported in this browser";
-      micToggleBtn.disabled = true;
+      speechFallbackMode = true;
+      micState.textContent = "Using fallback mic mode (server transcription)";
       return;
     }
 
@@ -251,19 +353,51 @@
     recognition.lang = "en-US";
 
     recognition.onstart = () => {
+      recognitionErrorCount = 0;
       isListening = true;
+      shouldListen = true;
       micState.textContent = "Listening...";
       micToggleBtn.textContent = "Stop Mic";
     };
 
     recognition.onend = () => {
       isListening = false;
+      if (shouldListen) {
+        micState.textContent = "Reconnecting mic...";
+        setTimeout(() => {
+          if (!shouldListen || isListening) return;
+          try {
+            recognition.start();
+          } catch (_) {}
+        }, 250);
+        return;
+      }
       micState.textContent = "Mic off";
       micToggleBtn.textContent = "Start Mic";
     };
 
-    recognition.onerror = () => {
-      micState.textContent = "Mic error. Check microphone permissions.";
+    recognition.onerror = (event) => {
+      const reason = (event && event.error) || "unknown";
+      recognitionErrorCount += 1;
+      if (reason === "not-allowed" || reason === "service-not-allowed") {
+        shouldListen = false;
+        micState.textContent = "Mic blocked. Allow microphone access in browser settings.";
+        micToggleBtn.textContent = "Start Mic";
+        return;
+      }
+      if (reason === "no-speech") {
+        micState.textContent = "No speech detected. Keep talking after mic starts.";
+      } else if (reason === "audio-capture") {
+        micState.textContent = "No microphone detected. Check your device input.";
+      } else {
+        micState.textContent = "Mic error. Check permissions and try again.";
+      }
+      if (recognitionErrorCount >= 2 && shouldListen) {
+        speechFallbackMode = true;
+        shouldListen = false;
+        try { recognition.stop(); } catch (_) {}
+        startFallbackListening();
+      }
     };
 
     recognition.onresult = (event) => {
@@ -275,8 +409,50 @@
         else interim += text;
       }
       liveText.textContent = interim ? `Listening: ${interim}` : "";
-      if (finalText.trim()) sendToAI(finalText.trim());
+      if (finalText.trim()) {
+        lastTranscriptAt = Date.now();
+        sendToAI(finalText.trim());
+      }
     };
+  }
+
+  async function ensureMicPermission() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      return true;
+    } catch (_) {
+      micState.textContent = "Microphone permission denied.";
+      return false;
+    }
+  }
+
+  async function endMeeting(redirectToDashboard) {
+    if (meetingEnded) {
+      if (redirectToDashboard) location.assign("/dashboard");
+      return;
+    }
+    meetingEnded = true;
+    shouldListen = false;
+    if (recognition && isListening) {
+      try { recognition.stop(); } catch (_) {}
+    }
+    stopFallbackListening();
+    if (rollingSummaryTimer) {
+      clearInterval(rollingSummaryTimer);
+      rollingSummaryTimer = null;
+    }
+    try {
+      await fetch(`/meetings/${meetingId}/end`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ recording_url: null }),
+        keepalive: true,
+      });
+    } catch (_) {}
+    if (redirectToDashboard) location.assign("/dashboard");
   }
 
   startInterviewBtn.addEventListener("click", startInterview);
@@ -307,9 +483,42 @@
     }
   });
   micToggleBtn.addEventListener("click", () => {
+    if (speechFallbackMode) {
+      if (isListening) {
+        stopFallbackListening();
+        return;
+      }
+      startFallbackListening();
+      return;
+    }
     if (!recognition) return;
-    if (isListening) recognition.stop();
-    else recognition.start();
+    if (isListening) {
+      shouldListen = false;
+      recognition.stop();
+      return;
+    }
+    ensureMicPermission().then((ok) => {
+      if (!ok) return;
+      shouldListen = true;
+      lastTranscriptAt = 0;
+      try {
+        recognition.start();
+      } catch (_) {
+        speechFallbackMode = true;
+        startFallbackListening();
+      }
+    });
+  });
+  endMeetingBtn.addEventListener("click", () => {
+    endMeeting(true);
+  });
+  window.addEventListener("beforeunload", () => {
+    if (meetingEnded) return;
+    stopFallbackListening();
+    try {
+      const data = new Blob([JSON.stringify({ recording_url: null })], { type: "application/json" });
+      navigator.sendBeacon(`/meetings/${meetingId}/end`, data);
+    } catch (_) {}
   });
   sendChatBtn.addEventListener("click", () => {
     sendToAI(chatInput.value);
@@ -323,7 +532,28 @@
   });
   refreshSummaryBtn.addEventListener("click", refreshSummary);
   qaAskBtn.addEventListener("click", askMeetingMemory);
+  liveSearchBtn.addEventListener("click", applyLiveSearch);
+  liveSearchInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    applyLiveSearch();
+  });
+  document.addEventListener("keydown", (event) => {
+    const isShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
+    if (!isShortcut || !liveSearchInput) return;
+    event.preventDefault();
+    liveSearchInput.focus();
+    liveSearchInput.select();
+  });
   initSpeechRecognition();
+  setInterval(() => {
+    if (!isListening || !shouldListen) return;
+    if (!lastTranscriptAt) return;
+    const silenceMs = Date.now() - lastTranscriptAt;
+    if (silenceMs > 30000) {
+      micState.textContent = "Listening... speak clearly near mic";
+    }
+  }, 5000);
 
   const api = new JitsiMeetExternalAPI("{{ jitsi_domain }}", {
     roomName: "{{ meeting.jitsi_room_name }}",
@@ -338,6 +568,10 @@
   });
   api.addListener("videoConferenceJoined", () => {
     deviceStatus.textContent = "Joined meeting. Use toggles for camera/mic.";
+  });
+  api.addListener("audioMuteStatusChanged", (event) => {
+    if (!event) return;
+    deviceStatus.textContent = event.muted ? "Meeting mic is muted in Jitsi." : "Meeting mic is live in Jitsi.";
   });
 
   async function enableDevices() {

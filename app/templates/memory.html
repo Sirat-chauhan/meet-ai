@@ -11,13 +11,17 @@
 <section class="card">
   <h2>Ask Across Previous Meetings</h2>
   <p class="muted">Select one meeting or search across all your meeting transcripts.</p>
+  {% if selected_meeting_id != 'all' and selected_transcript_count == 0 %}
+    <p class="hint">This meeting has no transcript lines yet. Choose another meeting or select "All meetings".</p>
+  {% endif %}
   <form method="post" action="/memory/ask" class="stack">
     <label>Meeting Scope</label>
     <select name="meeting_id">
       <option value="all" {% if selected_meeting_id == 'all' %}selected{% endif %}>All meetings</option>
       {% for m in meetings %}
+        {% set transcript_count = transcript_counts.get(m.id, 0) %}
         <option value="{{ m.id }}" {% if selected_meeting_id == (m.id|string) %}selected{% endif %}>
-          {{ m.room_id }} ({{ m.status }})
+          {{ m.room_id }} ({{ m.status }}, {{ transcript_count }} lines)
         </option>
       {% endfor %}
     </select>

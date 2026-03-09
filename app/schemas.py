@@ -21,6 +21,7 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: str
+    email_verified: bool
     plan: str
 
     class Config:
