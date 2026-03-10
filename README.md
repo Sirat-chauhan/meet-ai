@@ -110,7 +110,7 @@ Open: `http://localhost:5173`
 
 ## Optional migration flow (Alembic)
 ```bash
-alembic upgrade head
+PYTHONPATH=. alembic upgrade head
 ```
 
 Email verification fields were added in migration `20260309_01`, so run migrations if you already have an existing local DB. The local `users` table is still used even with Supabase Auth, because the app stores ownership and plan data there.
@@ -140,7 +140,7 @@ Supabase setup for Render:
 ### Start command used
 - Web: `PYTHONPATH=. gunicorn -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:$PORT app.main:app`
 
-You can reuse this from [`Procfile`](./Procfile) on other non-Docker platforms as well.
+You can reuse this from [`Procfile`](./Procfile) on other PaaS platforms as well.
 
 ## How to test interview quickly
 1. Sign up and login at `/login`

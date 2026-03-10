@@ -14,7 +14,6 @@ Meet AI is a FastAPI-based meeting platform with:
 - Meeting memory Q&A (RAG-like retrieval)
 - Meeting summarization (OpenAI-first, local fallback)
 - Billing/upgrade scaffolding with Razorpay
-- Optional Celery/Redis async execution
 - Separate React/Vite frontend prototype (`frontend/`)
 
 ## 2) High-Level Architecture
@@ -25,7 +24,7 @@ Meet AI is a FastAPI-based meeting platform with:
 - Templates: Jinja2 server-rendered web UI
 - Realtime: WebSocket endpoint for meeting chat
 - AI provider: OpenAI SDK when key present; deterministic local fallbacks when absent
-- Background jobs: Celery if installed/configured; inline fallback if not
+- Background jobs: FastAPI `BackgroundTasks` (best-effort, in-process)
 
 ### Main Request Flow
 1. User authenticates and receives JWT (`/auth/login`) or cookie-based web session (`/login`).
@@ -56,13 +55,7 @@ Meet AI is a FastAPI-based meeting platform with:
   - Documents local and free-host deployment paths.
 
 - `requirements.txt`
-  - Python dependency lock for FastAPI, SQLAlchemy, Alembic, Authlib, Celery, Redis, Razorpay, OpenAI, etc.
-
-- `Dockerfile`
-  - Minimal Python 3.12 image, installs requirements, runs `uvicorn` on port 8000.
-
-- `docker-compose.yml`
-  - Defines `api` container and Node-based `frontend` dev container.
+  - Python dependency lock for FastAPI, SQLAlchemy, Alembic, Authlib, Razorpay, OpenAI, etc.
 
 - `Procfile`
   - Production-like start command via `gunicorn` + `uvicorn` worker.
@@ -133,7 +126,6 @@ Meet AI is a FastAPI-based meeting platform with:
 - `app/tasks.py`
   - Summary generation task logic.
   - Builds transcript text, calls AI summarizer, upserts `MeetingSummary`.
-  - Exposes Celery task wrapper.
 
 - `app/static/styles.css`
   - Main styling for Jinja pages.
@@ -311,7 +303,7 @@ Meet AI is a FastAPI-based meeting platform with:
 - Local quick path: `uvicorn app.main:app --reload`.
 - Production path: `gunicorn` with Uvicorn workers.
 - Render blueprint is set for single service with SQLite.
-- Celery/Redis support is optional and disabled by default.
+- No Celery/Redis worker is required for the default deployment path.
 
 ## 9) Gaps and Cautions
 - Template route `/verify-email` and API route `/auth/verify-email` both exist; behavior differs (HTML redirect vs JSON).
