@@ -1,1 +1,1 @@
-web: bash -lc 'PYTHONPATH=. alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:${PORT:-8000} app.main:app'
+web: bash -lc 'bash scripts/render_start.sh'

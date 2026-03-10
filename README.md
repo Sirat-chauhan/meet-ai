@@ -122,6 +122,9 @@ Fix options:
 - **Reset DB (simplest):** delete the DB / create a fresh database, then redeploy.
 - **Keep existing DB:** run `PYTHONPATH=. alembic stamp head` once (creates/updates `alembic_version` without running `CREATE TABLE`), then redeploy.
 
+Render Free note:
+- Render Free does not support web shell access. The default start command uses `scripts/render_start.sh`, which auto-stamps `head` for the common `DuplicateTable` case and continues boot.
+
 ## Free deploy mode (single service)
 This repo is configured for a free single-service deployment (no managed Redis/Postgres/worker required) using [`render.yaml`](./render.yaml).
 
