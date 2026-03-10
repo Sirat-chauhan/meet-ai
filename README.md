@@ -117,6 +117,7 @@ Email verification fields were added in migration `20260309_01`, so run migratio
 
 ## Free deploy mode (single service)
 This repo is configured for a free single-service deployment (no managed Redis/Postgres/worker required) using [`render.yaml`](./render.yaml).
+If your Render service is configured as a **Docker** service, it will build using `Dockerfile` instead.
 
 ### Quick steps
 1. Push this repo to GitHub.
