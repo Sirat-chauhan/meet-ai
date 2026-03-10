@@ -115,9 +115,19 @@ PYTHONPATH=. alembic upgrade head
 
 Email verification fields were added in migration `20260309_01`, so run migrations if you already have an existing local DB. The local `users` table is still used even with Supabase Auth, because the app stores ownership and plan data there.
 
+### Troubleshooting migrations
+If you previously started the app with `AUTO_CREATE_TABLES=true` on the same database and later enabled Alembic migrations, you may see errors like `DuplicateTable: relation "users" already exists`.
+
+Fix options:
+- **Reset DB (simplest):** delete the DB / create a fresh database, then redeploy.
+- **Keep existing DB:** run `PYTHONPATH=. alembic stamp head` once (creates/updates `alembic_version` without running `CREATE TABLE`), then redeploy.
+
 ## Free deploy mode (single service)
 This repo is configured for a free single-service deployment (no managed Redis/Postgres/worker required) using [`render.yaml`](./render.yaml).
-If your Render service is configured as a **Docker** service, it will build using `Dockerfile` instead.
+
+### Render deploy options
+- **Recommended (Blueprint / Python service):** use [`render.yaml`](./render.yaml). No Docker setup is required.
+- **Docker service:** Render will build using `Dockerfile`. If you created a Docker service earlier, keep `Dockerfile` in the repo or switch the service to the Blueprint/Python flow.
 
 ### Quick steps
 1. Push this repo to GitHub.
