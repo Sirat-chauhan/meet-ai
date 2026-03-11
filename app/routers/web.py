@@ -608,6 +608,7 @@ def meeting_page(meeting_id: int, request: Request, db: Session = Depends(get_db
             "active_page": "meetings",
             "user": user,
             "enable_server_transcription": settings.enable_server_transcription,
+            "speech_recognition_lang": settings.speech_recognition_lang,
         },
     )
 

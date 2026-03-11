@@ -28,6 +28,7 @@ class Settings:
     openai_embedding_model: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
     openai_transcription_model: str = os.getenv("OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
     enable_server_transcription: bool = os.getenv("ENABLE_SERVER_TRANSCRIPTION", "true").lower() == "true"
+    speech_recognition_lang: str = os.getenv("SPEECH_RECOGNITION_LANG", "en-US")
 
     razorpay_key_id: str = os.getenv("RAZORPAY_KEY_ID", "")
     razorpay_key_secret: str = os.getenv("RAZORPAY_KEY_SECRET", "")
