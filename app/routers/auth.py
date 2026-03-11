@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..deps import get_current_user, get_db
 from ..models import User
 from ..schemas import AuthLoginRequest, AuthSignupRequest, TokenResponse, UserResponse
@@ -27,7 +28,8 @@ def signup(
     normalized_email = (payload.email or "").strip().lower()
     if is_supabase_auth_enabled():
         try:
-            auth_response = sign_up(normalized_email, payload.password)
+            redirect_to = f"{settings.app_base_url.rstrip('/')}/login?message=Email+verified.+You+can+log+in+now."
+            auth_response = sign_up(normalized_email, payload.password, email_redirect_to=redirect_to)
             auth_user = auth_response.get("user") or {"email": normalized_email}
             return sync_local_user(db, auth_user)
         except SupabaseAuthError as exc:
