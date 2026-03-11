@@ -367,10 +367,10 @@ select {
 .jitsi-stage { position: relative; }
 .jitsi-bot-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .meeting-jitsi-frame {
-  height: clamp(320px, 62vh, 520px);
+  height: clamp(380px, 70vh, 650px);
 }
 .guest-jitsi-frame {
-  height: clamp(320px, 70vh, 650px);
+  height: clamp(420px, 75vh, 720px);
 }
 .ai-tile-overlay {
   position: absolute;
@@ -1193,11 +1193,11 @@ button.secondary-btn:hover { background: #e6ecf5; }
   }
 
   .meeting-jitsi-frame {
-    height: clamp(260px, 48vh, 420px);
+    height: clamp(320px, 60vh, 520px);
   }
 
   .guest-jitsi-frame {
-    height: clamp(280px, 56vh, 460px);
+    height: clamp(320px, 65vh, 560px);
   }
 
   .modal-actions {
