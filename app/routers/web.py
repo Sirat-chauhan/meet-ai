@@ -607,6 +607,7 @@ def meeting_page(meeting_id: int, request: Request, db: Session = Depends(get_db
             "guest_join_url": _guest_join_url(request, meeting.guest_invite_token),
             "active_page": "meetings",
             "user": user,
+            "enable_server_transcription": settings.enable_server_transcription,
         },
     )
 

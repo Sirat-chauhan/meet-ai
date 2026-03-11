@@ -19,9 +19,15 @@ class Settings:
     supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
 
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
+    # Optional: point OpenAI SDK to an OpenAI-compatible provider (OpenRouter, Groq, Together, local, etc.)
+    openai_base_url: str = os.getenv("OPENAI_BASE_URL", "")
+    # Optional: JSON object string forwarded as default headers to the OpenAI SDK client.
+    openai_default_headers_json: str = os.getenv("OPENAI_DEFAULT_HEADERS_JSON", "")
     openai_chat_model: str = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
     openai_summary_model: str = os.getenv("OPENAI_SUMMARY_MODEL", "gpt-4o-mini")
     openai_embedding_model: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    openai_transcription_model: str = os.getenv("OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
+    enable_server_transcription: bool = os.getenv("ENABLE_SERVER_TRANSCRIPTION", "true").lower() == "true"
 
     razorpay_key_id: str = os.getenv("RAZORPAY_KEY_ID", "")
     razorpay_key_secret: str = os.getenv("RAZORPAY_KEY_SECRET", "")

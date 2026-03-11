@@ -485,10 +485,59 @@ select {
   color: #7fb896;
   font-size: 12px;
 }
+.meeting-live-stage-wrap {
+  margin-bottom: 12px;
+}
+.meeting-live-bottom {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 12px;
+  align-items: start;
+}
+.meeting-live-left,
+.meeting-live-right {
+  min-width: 0;
+}
+.meeting-live-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.meeting-live-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.meeting-accordion {
+  background: #050d09;
+  border: 1px solid #1a3d2d;
+  border-radius: 12px;
+  padding: 10px;
+}
+.meeting-accordion[open] { padding-bottom: 12px; }
+.meeting-accordion-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  color: #ecfff4;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+.meeting-accordion-summary::-webkit-details-marker { display: none; }
+.meeting-accordion-action { cursor: pointer; }
+.meeting-live .meeting-accordion .stack { margin-bottom: 10px; }
+.meeting-side-chatbox { min-height: 180px; max-height: 260px; }
+
 .meeting-live-layout {
   display: grid;
-  grid-template-columns: 1fr 190px;
+  grid-template-columns: 1fr 360px;
   gap: 12px;
+  align-items: start;
 }
 .meeting-live-main {
   background: #02060a;
@@ -542,11 +591,74 @@ select {
   background: #02060a;
   border: 1px solid #112129;
   border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  align-items: stretch;
+  position: sticky;
+  top: 12px;
+  height: calc(100vh - 240px);
+  overflow: hidden;
+}
+.meeting-live-side.meeting-live-side-inline {
+  position: static;
+  height: auto;
+  overflow: visible;
+}
+.meeting-side-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.meeting-side-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.meeting-side-tabs {
   display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 8px;
-  padding: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.meeting-side-tab {
+  background: #0d2218;
+  border: 1px solid #214a36;
+  color: #bde5cd;
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.meeting-side-tab:hover { background: #143224; }
+.meeting-side-tab.active {
+  background: #1a4331;
+  border-color: #2a6e51;
+  color: #ecfff4;
+}
+.meeting-side-panels {
+  overflow: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 2px;
+}
+.meeting-side-panel {
+  margin-bottom: 0;
+}
+.meeting-side-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.meeting-side-chatbox {
+  min-height: 180px;
+  max-height: 260px;
 }
 .meeting-live-user-badge {
   width: 44px;
@@ -573,6 +685,15 @@ select {
   color: #d4edde;
 }
 .meeting-live .card h3 { color: #ecfff4; }
+.meeting-live .chat-box {
+  background: #040f0b;
+  border-color: #1a4331;
+  color: #dff5e8;
+}
+.meeting-live .chat-box strong,
+.meeting-live .chat-box b {
+  color: #ecfff4;
+}
 .meeting-live .card textarea,
 .meeting-live .card input {
   background: #06150f;
@@ -580,6 +701,19 @@ select {
   color: #d4edde;
 }
 .meeting-live .clean-list li { color: #cfead9; }
+.meeting-live .transcripts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+button.secondary-btn {
+  background: #f2f4f7;
+  color: #2a3140;
+  border: 1px solid #d9e1ea;
+}
+button.secondary-btn:hover { background: #e6ecf5; }
 
 .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 10px; }
 .upgrade-title {
@@ -923,11 +1057,13 @@ select {
   .meeting-live-layout {
     grid-template-columns: 1fr;
   }
+  .meeting-live-bottom {
+    grid-template-columns: 1fr;
+  }
   .meeting-live-side {
     min-height: 140px;
-  }
-  .meeting-live-panels {
-    grid-template-columns: 1fr;
+    position: static;
+    height: auto;
   }
   #deviceStatus {
     margin-left: 0;

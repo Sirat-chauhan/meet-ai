@@ -3,6 +3,7 @@ import json
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..deps import get_current_user, get_db
 from ..models import Meeting, Transcript, TranscriptEmbedding, User
 from ..schemas import TranscriptCreateRequest, TranscriptResponse
@@ -59,6 +60,12 @@ async def transcribe_audio(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
     subscription_service.assert_can_add_transcript(current_user, db)
 
+    if not settings.enable_server_transcription:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Server transcription is disabled (ENABLE_SERVER_TRANSCRIPTION=false).",
+        )
+
     if not ai_service.client:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -67,7 +74,7 @@ async def transcribe_audio(
 
     audio_bytes = await audio.read()
     transcript_result = ai_service.client.audio.transcriptions.create(
-        model="whisper-1",
+        model=settings.openai_transcription_model,
         file=(audio.filename or "audio.webm", audio_bytes, audio.content_type or "audio/webm"),
     )
     text = transcript_result.text

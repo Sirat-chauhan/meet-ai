@@ -119,7 +119,14 @@ def chat_with_agent(
         f"Personality: {agent.personality}\n"
         f"Interview Script: {agent.interview_script or 'N/A'}"
     )
-    reply = ai_service.chat_reply(system_prompt, conversation, temperature=float(agent.temperature))
+    try:
+        reply = ai_service.chat_reply(system_prompt, conversation, temperature=float(agent.temperature))
+    except Exception as exc:  # noqa: BLE001
+        provider_status = getattr(exc, "status_code", None)
+        detail = str(exc) or "AI provider request failed"
+        if provider_status:
+            detail = f"AI provider error (HTTP {provider_status}): {detail}"
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail) from exc
 
     ai_message = Message(meeting_id=meeting.id, sender="ai", content=reply, is_voice=False)
     db.add(ai_message)
@@ -178,7 +185,14 @@ def refresh_meeting_summary(
     if not meeting:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
 
-    generate_meeting_summary(meeting_id)
+    try:
+        generate_meeting_summary(meeting_id)
+    except Exception as exc:  # noqa: BLE001
+        provider_status = getattr(exc, "status_code", None)
+        detail = str(exc) or "Summary generation failed"
+        if provider_status:
+            detail = f"AI provider error (HTTP {provider_status}): {detail}"
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail) from exc
     summary = db.query(MeetingSummary).filter(MeetingSummary.meeting_id == meeting_id).first()
     if not summary:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Summary not ready")

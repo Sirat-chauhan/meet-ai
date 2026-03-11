@@ -32,7 +32,7 @@ AI-powered meeting platform built with Python (FastAPI) and Jitsi, with optional
 - Frontend: React (Vite) + meeting web page template
 - DB: SQLite (default local) or PostgreSQL
 - Video: Jitsi (`meet.jit.si`)
-- AI: OpenAI (chat, embeddings, whisper endpoint)
+- AI: OpenAI SDK (chat/embeddings/audio) with support for OpenAI-compatible providers via `OPENAI_BASE_URL`
 
 ## Environment setup
 Copy env and edit values:
@@ -42,6 +42,9 @@ cp .env.example .env
 
 Important keys:
 - `OPENAI_API_KEY`: set this to use OpenAI for live interview intelligence
+- `OPENAI_BASE_URL` (optional): point the OpenAI SDK at an OpenAI-compatible provider (OpenRouter, Groq, Together, local, etc.)
+- `OPENAI_DEFAULT_HEADERS_JSON` (optional): JSON object string of headers forwarded to the OpenAI SDK (useful for OpenRouter attribution)
+- `ENABLE_SERVER_TRANSCRIPTION=true|false`: controls the mic-recording fallback that posts audio to `/transcripts/transcribe`
 - `DATABASE_URL`: default local is SQLite (`sqlite:///./ai_meeting_v2.db`)
 - `AUTO_CREATE_TABLES=true`: easiest local mode
 - `FRONTEND_ORIGIN=http://localhost:5173`
@@ -69,12 +72,39 @@ When Supabase Auth is not configured:
 ### OpenAI Mode (recommended)
 Set in `.env`:
 - `OPENAI_API_KEY=sk-...`
+- Optional (OpenAI-compatible providers):
+  - `OPENAI_BASE_URL=https://openrouter.ai/api/v1`
+  - `OPENAI_DEFAULT_HEADERS_JSON={"HTTP-Referer":"http://localhost:8001","X-Title":"Meet AI"}`
 
 When set, these features run on OpenAI:
 - interview Q&A responses
 - summaries
 - embeddings-based search
 - whisper transcription endpoint
+
+Note: If you use a third-party OpenAI-compatible provider, chat/summaries usually work. Embeddings and audio transcription depend on the provider.
+
+### Groq (or other OpenAI-compatible providers)
+You can run chat + summaries on providers like Groq by pointing the OpenAI SDK at their base URL and choosing a provider-supported model.
+
+Example `.env` (Groq):
+```bash
+OPENAI_API_KEY=your_groq_key
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
+
+# Pick models from your provider console/docs (model names can be deprecated).
+OPENAI_CHAT_MODEL=your_chat_model
+OPENAI_SUMMARY_MODEL=your_chat_model
+
+# Optional: leave blank if your provider doesn't support embeddings.
+OPENAI_EMBEDDING_MODEL=
+
+# Recommended for Groq: disable server transcription fallback (Whisper-style).
+ENABLE_SERVER_TRANSCRIPTION=false
+OPENAI_TRANSCRIPTION_MODEL=
+```
+
+Voice note: the primary mic flow uses **browser speech recognition** (Web Speech API). For best results use Chrome/Edge and allow microphone permissions.
 
 ### Optional fallback mode
 If `OPENAI_API_KEY` is empty, the app still runs with local fallback logic for interview/summaries/search.
@@ -86,10 +116,9 @@ Razorpay keys (only if testing billing):
 
 ## Local run (recommended first)
 ```bash
-cd /home/user/Desktop/ai_meeting_platform
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
 Open:
@@ -169,6 +198,13 @@ You can reuse this from [`Procfile`](./Procfile) on other PaaS platforms as well
 10. Check transcript list (auto-saves both sides)
 11. Click `Refresh Now` under Rolling Summary
 12. Ask a question in `Ask Meeting Memory`
+
+## Inviting guests
+Each meeting page has `Copy Invite Link`, which shares a `/join/{invite_token}` URL.
+
+Notes:
+- On local dev (`127.0.0.1`), invite links only work for someone who can reach your machine.
+- On Render (HTTPS), the invite link is public and can be opened by anyone with the URL.
 
 ## Verify OpenAI is active
 1. Set `OPENAI_API_KEY` in `.env`

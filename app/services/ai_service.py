@@ -1,6 +1,8 @@
 import hashlib
 import json
 import math
+import random
+import time
 from typing import Iterable
 
 try:
@@ -12,20 +14,69 @@ from ..config import settings
 
 
 class AIService:
+    _max_retry_attempts = 3
+    _base_retry_sleep_s = 0.6
+
     def __init__(self) -> None:
         if OpenAI and settings.openai_api_key:
-            self.client = OpenAI(api_key=settings.openai_api_key)
+            client_kwargs: dict = {"api_key": settings.openai_api_key}
+            base_url = (settings.openai_base_url or "").strip()
+            if base_url:
+                client_kwargs["base_url"] = base_url
+
+            headers_json = (settings.openai_default_headers_json or "").strip()
+            if headers_json:
+                try:
+                    parsed = json.loads(headers_json)
+                    if not isinstance(parsed, dict):
+                        raise ValueError("OPENAI_DEFAULT_HEADERS_JSON must be a JSON object")
+                    client_kwargs["default_headers"] = parsed
+                except Exception as exc:  # noqa: BLE001
+                    raise ValueError(f"Invalid OPENAI_DEFAULT_HEADERS_JSON: {exc}") from exc
+
+            self.client = OpenAI(**client_kwargs)
         else:
             self.client = None
+
+    @classmethod
+    def _is_retryable_exception(cls, exc: Exception) -> bool:
+        status_code = getattr(exc, "status_code", None)
+        if status_code in {429, 500, 502, 503, 504}:
+            return True
+        name = exc.__class__.__name__
+        return name in {
+            "RateLimitError",
+            "APITimeoutError",
+            "APIConnectionError",
+            "InternalServerError",
+            "ServiceUnavailableError",
+            "APIStatusError",
+        }
+
+    @classmethod
+    def _with_retries(cls, fn):
+        attempt = 0
+        while True:
+            try:
+                return fn()
+            except Exception as exc:  # noqa: BLE001
+                attempt += 1
+                if attempt >= cls._max_retry_attempts or not cls._is_retryable_exception(exc):
+                    raise
+                sleep_s = cls._base_retry_sleep_s * (2 ** (attempt - 1))
+                sleep_s += random.random() * 0.25
+                time.sleep(sleep_s)
 
     def chat_reply(self, system_prompt: str, conversation: list[dict], temperature: float = 0.7) -> str:
         if not self.client:
             return self._local_interviewer_reply(system_prompt, conversation)
 
-        response = self.client.chat.completions.create(
-            model=settings.openai_chat_model,
-            messages=[{"role": "system", "content": system_prompt}, *conversation],
-            temperature=temperature,
+        response = self._with_retries(
+            lambda: self.client.chat.completions.create(
+                model=settings.openai_chat_model,
+                messages=[{"role": "system", "content": system_prompt}, *conversation],
+                temperature=temperature,
+            )
         )
         return response.choices[0].message.content or ""
 
@@ -44,17 +95,41 @@ class AIService:
             "You are a meeting analyst. Return strict JSON with keys: "
             "summary (string), key_points (string), action_items (string)."
         )
-        response = self.client.chat.completions.create(
-            model=settings.openai_summary_model,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": transcript_text},
-            ],
-            temperature=0.2,
-            response_format={"type": "json_object"},
-        )
-        content = response.choices[0].message.content or "{}"
-        data = json.loads(content)
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": transcript_text},
+        ]
+        content = None
+        try:
+            response = self._with_retries(
+                lambda: self.client.chat.completions.create(
+                    model=settings.openai_summary_model,
+                    messages=messages,
+                    temperature=0.2,
+                    response_format={"type": "json_object"},
+                )
+            )
+            content = response.choices[0].message.content or "{}"
+        except Exception:
+            # Some OpenAI-compatible providers don't support response_format; retry with plain JSON instruction.
+            response = self._with_retries(
+                lambda: self.client.chat.completions.create(
+                    model=settings.openai_summary_model,
+                    messages=messages,
+                    temperature=0.2,
+                )
+            )
+            content = response.choices[0].message.content or ""
+
+        try:
+            data = json.loads(content or "{}")
+        except Exception:
+            return {
+                "summary": (content or "").strip() or "Summary unavailable.",
+                "key_points": "",
+                "action_items": "",
+            }
+
         return {
             "summary": data.get("summary", ""),
             "key_points": data.get("key_points", ""),
@@ -62,9 +137,14 @@ class AIService:
         }
 
     def embed_text(self, text: str) -> list[float]:
-        if self.client:
-            response = self.client.embeddings.create(model=settings.openai_embedding_model, input=text)
-            return response.data[0].embedding
+        embedding_model = (settings.openai_embedding_model or "").strip()
+        if self.client and embedding_model:
+            try:
+                response = self.client.embeddings.create(model=embedding_model, input=text)
+                return response.data[0].embedding
+            except Exception:
+                # Many OpenAI-compatible providers only support chat completions.
+                return self._deterministic_embedding(text)
         return self._deterministic_embedding(text)
 
     def answer_from_context(self, question: str, context_chunks: list[str]) -> str:
@@ -73,22 +153,24 @@ class AIService:
             return "I could not find relevant transcript context for that question."
 
         if self.client:
-            response = self.client.chat.completions.create(
-                model=settings.openai_chat_model,
-                temperature=0.2,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Answer only from provided transcript context. "
-                            "If context is insufficient, say so explicitly."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Question: {question}\n\nContext:\n{context_text}",
-                    },
-                ],
+            response = self._with_retries(
+                lambda: self.client.chat.completions.create(
+                    model=settings.openai_chat_model,
+                    temperature=0.2,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "Answer only from provided transcript context. "
+                                "If context is insufficient, say so explicitly."
+                            ),
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Question: {question}\n\nContext:\n{context_text}",
+                        },
+                    ],
+                )
             )
             return response.choices[0].message.content or ""
 

@@ -46,7 +46,15 @@ async def meeting_chat_websocket(websocket: WebSocket, meeting_id: int):
                 f"Personality: {agent.personality}\n"
                 f"Interview Script: {agent.interview_script or 'N/A'}"
             )
-            reply = ai_service.chat_reply(system_prompt, conversation, temperature=float(agent.temperature))
+            try:
+                reply = ai_service.chat_reply(system_prompt, conversation, temperature=float(agent.temperature))
+            except Exception as exc:  # noqa: BLE001
+                provider_status = getattr(exc, "status_code", None)
+                detail = str(exc) or "AI provider request failed"
+                if provider_status:
+                    detail = f"AI provider error (HTTP {provider_status}): {detail}"
+                await websocket.send_text(f"System: {detail}")
+                continue
 
             db.add(Message(meeting_id=meeting.id, sender="ai", content=reply, is_voice=False))
             db.commit()

@@ -22,16 +22,64 @@
     <span id="deviceStatus">Device permission not requested yet</span>
   </section>
 
-  <section class="meeting-live-layout">
-    <article class="meeting-live-main">
-      <div class="jitsi-stage meeting-live-stage">
-        <div id="jitsi-container" class="meeting-jitsi-frame"></div>
-        <div id="jitsi-bot-container" class="jitsi-bot-hidden"></div>
-        <div class="ai-tile-overlay" id="aiTileOverlay">
-          <div class="ai-avatar">AI</div>
-          <div class="ai-meta">
-            <strong>{{ agent.name }}</strong>
-            <span id="ai-status-inline">Connected</span>
+  <section class="meeting-live-stage-wrap">
+    <div class="jitsi-stage meeting-live-stage">
+      <div id="jitsi-container" class="meeting-jitsi-frame"></div>
+      <div id="jitsi-bot-container" class="jitsi-bot-hidden"></div>
+      <div class="ai-tile-overlay" id="aiTileOverlay">
+        <div class="ai-avatar">AI</div>
+        <div class="ai-meta">
+          <strong>{{ agent.name }}</strong>
+          <span id="ai-status-inline">Connected</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="meeting-live-bottom">
+    <aside class="meeting-live-left">
+      <details class="meeting-accordion" open>
+        <summary class="meeting-accordion-summary">
+          <span>Rolling Summary (Live)</span>
+          <button id="refreshSummaryBtn" type="button" class="secondary-btn meeting-accordion-action">Refresh</button>
+        </summary>
+        <div id="summaryBox" class="chat-box meeting-live-chatbox meeting-side-chatbox"></div>
+      </details>
+
+      <details class="meeting-accordion">
+        <summary class="meeting-accordion-summary">
+          <span>Ask Meeting Memory</span>
+        </summary>
+        <div class="stack">
+          <textarea id="qaQuestion" rows="3" placeholder="What did we decide about timeline?"></textarea>
+          <button id="qaAskBtn" type="button">Ask</button>
+        </div>
+        <div id="qaAnswer" class="chat-box meeting-live-chatbox meeting-side-chatbox"></div>
+      </details>
+
+      <details class="meeting-accordion">
+        <summary class="meeting-accordion-summary transcripts-header">
+          <span>Transcripts</span>
+          <button id="toggleTranscriptsBtn" type="button" class="secondary-btn meeting-accordion-action" aria-expanded="true">Collapse</button>
+        </summary>
+        <div id="transcriptsPanel">
+          <ul id="transcriptList" class="clean-list">
+            {% for row in transcripts %}
+              <li><strong>{{ row.speaker }}</strong>: {{ row.text }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </details>
+    </aside>
+
+    <article class="meeting-live-right">
+      <div class="meeting-live-side meeting-live-side-inline">
+        <div class="meeting-side-top">
+          <div class="meeting-live-user-badge">{{ (user.email[0:2]|upper) if user and user.email else 'JD' }}</div>
+          <div class="meeting-side-meta">
+            <div class="meeting-live-you">You</div>
+            <div id="micState">Muted</div>
+            <p id="ai-status">{{ agent.name }} connected</p>
           </div>
         </div>
       </div>
@@ -52,39 +100,6 @@
       <div id="chat-box" class="chat-box meeting-live-chatbox"></div>
       <div id="liveText" class="hint"></div>
     </article>
-
-    <aside class="meeting-live-side">
-      <div class="meeting-live-user-badge">{{ (user.email[0:2]|upper) if user and user.email else 'JD' }}</div>
-      <div class="meeting-live-you">You</div>
-      <div id="micState">Muted</div>
-      <p id="ai-status">{{ agent.name }} connected</p>
-    </aside>
-  </section>
-
-  <section class="meeting-live-panels">
-    <article class="card">
-      <h3>Rolling Summary (Live)</h3>
-      <button id="refreshSummaryBtn" type="button">Refresh Now</button>
-      <div id="summaryBox" class="chat-box" style="min-height:180px;max-height:260px;"></div>
-    </article>
-
-    <article class="card">
-      <h3>Ask Meeting Memory</h3>
-      <div class="stack">
-        <textarea id="qaQuestion" rows="3" placeholder="What did we decide about timeline?"></textarea>
-        <button id="qaAskBtn" type="button">Ask</button>
-      </div>
-      <div id="qaAnswer" class="chat-box" style="min-height:180px;max-height:260px;"></div>
-    </article>
-  </section>
-
-  <section class="card">
-    <h3>Transcripts</h3>
-    <ul id="transcriptList" class="clean-list">
-      {% for row in transcripts %}
-        <li><strong>{{ row.speaker }}</strong>: {{ row.text }}</li>
-      {% endfor %}
-    </ul>
   </section>
 </div>
 
@@ -93,6 +108,7 @@
   const meetingId = {{ meeting.id }};
   const agentName = {{ agent.name|tojson }};
   const interviewScript = {{ (agent.interview_script or "")|tojson }};
+  const enableServerTranscription = {{ enable_server_transcription|tojson }};
   const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
   const socket = new WebSocket(`${wsProtocol}://${location.host}/ws/${meetingId}`);
   const chatBox = document.getElementById("chat-box");
@@ -115,6 +131,8 @@
   const guestInviteUrl = document.getElementById("guestInviteUrl");
   const liveSearchInput = document.getElementById("liveSearchInput");
   const liveSearchBtn = document.getElementById("liveSearchBtn");
+  const toggleTranscriptsBtn = document.getElementById("toggleTranscriptsBtn");
+  const transcriptsPanel = document.getElementById("transcriptsPanel");
   const enableDevicesBtn = document.getElementById("enableDevicesBtn");
   const toggleJitsiMicBtn = document.getElementById("toggleJitsiMicBtn");
   const toggleJitsiCamBtn = document.getElementById("toggleJitsiCamBtn");
@@ -133,6 +151,37 @@
   let meetingEnded = false;
   let recognition = null;
   let rollingSummaryTimer = null;
+
+  function setTranscriptsCollapsed(collapsed) {
+    const isCollapsed = !!collapsed;
+    if (transcriptsPanel) transcriptsPanel.style.display = isCollapsed ? "none" : "";
+    if (toggleTranscriptsBtn) {
+      toggleTranscriptsBtn.textContent = isCollapsed ? "Show" : "Collapse";
+      toggleTranscriptsBtn.setAttribute("aria-expanded", String(!isCollapsed));
+    }
+    try {
+      localStorage.setItem(`meetai:transcriptsCollapsed:${meetingId}`, JSON.stringify(isCollapsed));
+    } catch (_) {}
+  }
+
+  (function initTranscriptCollapse() {
+    let collapsed = true; // default collapsed
+    try {
+      const raw = localStorage.getItem(`meetai:transcriptsCollapsed:${meetingId}`);
+      if (raw !== null) collapsed = !!JSON.parse(raw);
+    } catch (_) {}
+    setTranscriptsCollapsed(collapsed);
+    if (toggleTranscriptsBtn) {
+      toggleTranscriptsBtn.addEventListener("click", (event) => {
+        if (event) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        const currentlyCollapsed = transcriptsPanel && transcriptsPanel.style.display === "none";
+        setTranscriptsCollapsed(!currentlyCollapsed);
+      });
+    }
+  })();
 
   async function saveTranscriptLine(speaker, text) {
     if (!text || !text.trim()) return;
@@ -169,19 +218,80 @@
     aiStatus.textContent = "Chat connection error";
     aiStatusInline.textContent = "Error";
   };
+  socket.onclose = () => {
+    if (meetingEnded) return;
+    aiStatus.textContent = "Chat disconnected";
+    aiStatusInline.textContent = "Disconnected";
+  };
 
   function sendToAI(message) {
     const normalized = (message || "").trim();
     if (!normalized) return;
+    liveText.textContent = "";
+
+    const addUserLine = () => {
+      chatBox.innerHTML += `<p><b>You:</b> ${normalized}</p>`;
+      chatBox.scrollTop = chatBox.scrollHeight;
+      saveTranscriptLine("candidate", normalized);
+    };
+
+    const addAgentLine = (replyText) => {
+      const reply = (replyText || "").trim();
+      if (!reply) return;
+      chatBox.innerHTML += `<p><b>${agentName}:</b> ${reply}</p>`;
+      chatBox.scrollTop = chatBox.scrollHeight;
+      saveTranscriptLine(agentName, reply);
+      aiStatus.textContent = "AI is speaking";
+      aiStatusInline.textContent = "Speaking";
+      speakText(reply);
+      setTimeout(() => {
+        aiStatus.textContent = "AI interviewer connected";
+        aiStatusInline.textContent = "Connected";
+      }, 1200);
+    };
+
+    // Fallback path: if WS isn't ready, use the HTTP chat endpoint.
     if (socket.readyState !== WebSocket.OPEN) {
-      chatBox.innerHTML += "<p><b>System:</b> Chat connection is not ready. Reload page.</p>";
+      addUserLine();
+      aiStatus.textContent = "Reconnecting chat...";
+      aiStatusInline.textContent = "Reconnecting";
+      fetch(`/meetings/${meetingId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ message: normalized, is_voice: false }),
+      })
+        .then(async (res) => {
+          const contentType = (res.headers.get("content-type") || "").toLowerCase();
+          if (!res.ok) {
+            let detail = "";
+            try {
+              if (contentType.includes("application/json")) {
+                const err = await res.json();
+                detail = err?.detail ? String(err.detail) : JSON.stringify(err);
+              } else {
+                detail = (await res.text()).slice(0, 200);
+              }
+            } catch (_) {}
+            throw new Error(`HTTP ${res.status}${detail ? `: ${detail}` : ""}`);
+          }
+          if (!contentType.includes("application/json")) {
+            throw new Error("Unexpected response (not JSON). Are you logged in?");
+          }
+          const data = await res.json();
+          addAgentLine((data && data.reply) || "");
+        })
+        .catch((err) => {
+          const msg = (err && err.message) ? err.message : "Unknown error";
+          chatBox.innerHTML += `<p><b>System:</b> Chat failed (${msg}). If you changed SECRET_KEY, log out and log in again.</p>`;
+          aiStatus.textContent = "Chat connection error";
+          aiStatusInline.textContent = "Error";
+        });
       return;
     }
+
     socket.send(normalized);
-    chatBox.innerHTML += `<p><b>You:</b> ${normalized}</p>`;
-    chatBox.scrollTop = chatBox.scrollHeight;
-    saveTranscriptLine("candidate", normalized);
-    liveText.textContent = "";
+    addUserLine();
   }
 
   function speakText(text) {
@@ -214,7 +324,21 @@
         method: "POST",
         credentials: "include",
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const contentType = (res.headers.get("content-type") || "").toLowerCase();
+          if (contentType.includes("application/json")) {
+            const err = await res.json();
+            if (err?.detail) detail = String(err.detail);
+          } else {
+            const text = await res.text();
+            if (text) detail = text.slice(0, 200);
+          }
+        } catch (_) {}
+        summaryBox.innerHTML = `<p><b>Summary:</b> ${detail}</p>`;
+        return;
+      }
       const data = await res.json();
       summaryBox.innerHTML = `
         <p><b>Summary:</b> ${data.summary || ""}</p>
@@ -342,8 +466,13 @@
   function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      speechFallbackMode = true;
-      micState.textContent = "Using fallback mic mode (server transcription)";
+      if (enableServerTranscription) {
+        speechFallbackMode = true;
+        micState.textContent = "Using fallback mic mode (server transcription)";
+      } else {
+        speechFallbackMode = false;
+        micState.textContent = "Browser speech recognition not supported. Use Chrome/Edge or enable server transcription.";
+      }
       return;
     }
 
@@ -393,10 +522,16 @@
         micState.textContent = "Mic error. Check permissions and try again.";
       }
       if (recognitionErrorCount >= 2 && shouldListen) {
-        speechFallbackMode = true;
         shouldListen = false;
         try { recognition.stop(); } catch (_) {}
-        startFallbackListening();
+        if (enableServerTranscription) {
+          speechFallbackMode = true;
+          startFallbackListening();
+        } else {
+          speechFallbackMode = false;
+          micState.textContent = "Speech recognition is failing in this browser. Use Chrome/Edge or enable server transcription.";
+          micToggleBtn.textContent = "Start Mic";
+        }
       }
     };
 
@@ -504,8 +639,15 @@
       try {
         recognition.start();
       } catch (_) {
-        speechFallbackMode = true;
-        startFallbackListening();
+        if (enableServerTranscription) {
+          speechFallbackMode = true;
+          startFallbackListening();
+        } else {
+          speechFallbackMode = false;
+          shouldListen = false;
+          micState.textContent = "Could not start browser speech recognition. Use Chrome/Edge or enable server transcription.";
+          micToggleBtn.textContent = "Start Mic";
+        }
       }
     });
   });
@@ -530,7 +672,13 @@
     sendToAI(chatInput.value);
     chatInput.value = "";
   });
-  refreshSummaryBtn.addEventListener("click", refreshSummary);
+  refreshSummaryBtn.addEventListener("click", (event) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    refreshSummary();
+  });
   qaAskBtn.addEventListener("click", askMeetingMemory);
   liveSearchBtn.addEventListener("click", applyLiveSearch);
   liveSearchInput.addEventListener("keydown", (event) => {
