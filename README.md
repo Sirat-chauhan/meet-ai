@@ -44,10 +44,8 @@ Important keys:
 - `OPENAI_API_KEY`: set this to use OpenAI for live interview intelligence
 - `OPENAI_BASE_URL` (optional): point the OpenAI SDK at an OpenAI-compatible provider (OpenRouter, Groq, Together, local, etc.)
 - `OPENAI_DEFAULT_HEADERS_JSON` (optional): JSON object string of headers forwarded to the OpenAI SDK (useful for OpenRouter attribution)
-<<<<<<< HEAD
-- `ENABLE_SERVER_TRANSCRIPTION=true|false`: controls the mic-recording fallback that posts audio to `/transcripts/transcribe`
-=======
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
+- `OPENAI_CHAT_MAX_TOKENS` (optional): caps chat reply length (default `260`)
+- `OPENAI_TRANSCRIPTION_MODEL` (optional): audio transcription model (default `whisper-1`)
 - `DATABASE_URL`: default local is SQLite (`sqlite:///./ai_meeting_v2.db`)
 - `AUTO_CREATE_TABLES=true`: easiest local mode
 - `FRONTEND_ORIGIN=http://localhost:5173`
@@ -83,35 +81,15 @@ When set, these features run on OpenAI:
 - interview Q&A responses
 - summaries
 - embeddings-based search
-- whisper transcription endpoint
+- whisper transcription endpoint (`/meetings/{id}/transcripts/transcribe`)
 
 Note: If you use a third-party OpenAI-compatible provider, chat/summaries usually work. Embeddings and audio transcription depend on the provider.
 
-<<<<<<< HEAD
-### Groq (or other OpenAI-compatible providers)
-You can run chat + summaries on providers like Groq by pointing the OpenAI SDK at their base URL and choosing a provider-supported model.
+### Mic + transcription notes
+- If `OPENAI_API_KEY` is set, the meeting page uses **server transcription** via MediaRecorder → `/meetings/{id}/transcripts/transcribe` (Whisper). For best results, use Chrome/Edge and allow microphone permissions.
+- If `OPENAI_API_KEY` is not set, voice input depends on the browser Web Speech API (SpeechRecognition). Some browsers (often Firefox) do not support it.
+- If you use an OpenAI-compatible provider, audio transcription may be unsupported even if chat works.
 
-Example `.env` (Groq):
-```bash
-OPENAI_API_KEY=your_groq_key
-OPENAI_BASE_URL=https://api.groq.com/openai/v1
-
-# Pick models from your provider console/docs (model names can be deprecated).
-OPENAI_CHAT_MODEL=your_chat_model
-OPENAI_SUMMARY_MODEL=your_chat_model
-
-# Optional: leave blank if your provider doesn't support embeddings.
-OPENAI_EMBEDDING_MODEL=
-
-# Recommended for Groq: disable server transcription fallback (Whisper-style).
-ENABLE_SERVER_TRANSCRIPTION=false
-OPENAI_TRANSCRIPTION_MODEL=
-```
-
-Voice note: the primary mic flow uses **browser speech recognition** (Web Speech API). For best results use Chrome/Edge and allow microphone permissions.
-
-=======
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
 ### Optional fallback mode
 If `OPENAI_API_KEY` is empty, the app still runs with local fallback logic for interview/summaries/search.
 
@@ -132,6 +110,9 @@ Open:
 - `http://localhost:8001/login`
 
 Important: set `APP_BASE_URL=http://localhost:8001` in `.env` when running on port `8001`, and add `http://localhost:8001/login` to Supabase Auth redirect URLs if you are testing email verification locally.
+
+Email verification redirect:
+- After verification, users are redirected to `FRONTEND_ORIGIN` (or `APP_BASE_URL`) with `/?verified=1`.
 
 ## Optional React frontend
 ```bash
@@ -218,6 +199,10 @@ Notes:
 3. Start interview and ask a follow-up
 4. If responses feel dynamic/contextual, OpenAI mode is active
 
+## Performance notes
+- Chat over WebSocket sends only the most recent context (last ~16 messages) to keep responses fast.
+- Transcript embeddings are computed in a background task so saving a transcript line stays fast.
+
 ## Current limitation
 - The AI icon/tile in Jitsi is simulated via in-page/hidden client behavior.
 - A fully independent media-stream bot participant in Jitsi requires self-hosted Jitsi bot infrastructure.
@@ -231,13 +216,14 @@ Notes:
 - `POST /agents`
 - `GET /agents`
 - `POST /meetings`
-- `POST /meetings/{meeting_id}/chat`
 - `POST /meetings/{meeting_id}/transcripts`
 - `POST /meetings/{meeting_id}/transcripts/transcribe`
 - `POST /meetings/{meeting_id}/search`
 - `POST /meetings/{meeting_id}/end`
 - `GET /meetings/{meeting_id}/summary`
 - `POST /meetings/{meeting_id}/summary/refresh`
+- `POST /meetings/{meeting_id}/qa`
+- `WS /ws/{meeting_id}` (meeting chat)
 - `POST /meetings/{meeting_id}/qa`
 - `POST /billing/webhook`
 - `POST /billing/razorpay/order`
