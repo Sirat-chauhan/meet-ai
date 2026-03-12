@@ -19,7 +19,7 @@
   <section class="meeting-live-header">
     <span class="meeting-live-dot"></span>
     <h2>{{ meeting.room_id|replace('-', ' ')|title }}</h2>
-    <span id="deviceStatus">Device permission not requested yet</span>
+    <span id="deviceStatus">Click “Enable Camera & Mic” to grant permissions</span>
   </section>
 
   <section class="meeting-live-stage-wrap">
@@ -131,7 +131,6 @@
   const liveSearchInput = document.getElementById("liveSearchInput");
   const liveSearchBtn = document.getElementById("liveSearchBtn");
   const toggleTranscriptsBtn = document.getElementById("toggleTranscriptsBtn");
-  const transcriptsPanel = document.getElementById("transcriptsPanel");
   const enableDevicesBtn = document.getElementById("enableDevicesBtn");
   const deviceStatus = document.getElementById("deviceStatus");
   const aiStatus = document.getElementById("ai-status");
@@ -632,7 +631,7 @@
       if (recognitionErrorCount >= 2 && shouldListen) {
         shouldListen = false;
         try { recognition.stop(); } catch (_) {}
-        if (enableServerTranscription) {
+        if (serverTranscriptionEnabled) {
           speechFallbackMode = true;
           startFallbackListening();
         } else {
@@ -756,7 +755,7 @@
       try {
         recognition.start();
       } catch (_) {
-        if (enableServerTranscription) {
+        if (serverTranscriptionEnabled) {
           speechFallbackMode = true;
           startFallbackListening();
         } else {
@@ -822,6 +821,7 @@
 
   let api = null;
   let botApi = null;
+  let devicesRequested = false;
 
   function initJitsi() {
     if (!window.JitsiMeetExternalAPI) {
@@ -903,6 +903,8 @@
   initJitsi();
 
   async function enableDevices() {
+    if (devicesRequested) return;
+    devicesRequested = true;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       deviceStatus.textContent = "Browser does not support camera/mic APIs";
       return;
@@ -927,5 +929,12 @@
     }
   }
   enableDevicesBtn.addEventListener("click", enableDevices);
+  const stageClickTarget = document.getElementById("jitsi-container");
+  if (stageClickTarget) {
+    stageClickTarget.addEventListener("click", () => {
+      // Many browsers require a user gesture before prompting for camera/mic.
+      if (!devicesRequested) enableDevices();
+    });
+  }
 </script>
 {% endblock %}

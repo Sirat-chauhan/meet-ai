@@ -7,7 +7,7 @@
     <button id="enableDevicesBtn" type="button">Enable Camera & Mic</button>
     <button id="toggleJitsiMicBtn" type="button">Toggle Meeting Mic</button>
     <button id="toggleJitsiCamBtn" type="button">Toggle Meeting Camera</button>
-    <span id="deviceStatus" class="hint">Device permission not requested yet</span>
+    <span id="deviceStatus" class="hint">Click “Enable Camera & Mic” to grant permissions</span>
   </div>
 </section>
 
@@ -21,6 +21,7 @@
   const toggleJitsiMicBtn = document.getElementById("toggleJitsiMicBtn");
   const toggleJitsiCamBtn = document.getElementById("toggleJitsiCamBtn");
   const deviceStatus = document.getElementById("deviceStatus");
+  let devicesRequested = false;
 
   const api = new JitsiMeetExternalAPI("{{ jitsi_domain }}", {
     roomName: "{{ meeting.jitsi_room_name }}",
@@ -52,6 +53,8 @@
   });
 
   async function enableDevices() {
+    if (devicesRequested) return;
+    devicesRequested = true;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       deviceStatus.textContent = "Browser does not support camera/mic APIs";
       return;
@@ -66,6 +69,12 @@
   }
 
   enableDevicesBtn.addEventListener("click", enableDevices);
+  const stageClickTarget = document.getElementById("jitsi-container");
+  if (stageClickTarget) {
+    stageClickTarget.addEventListener("click", () => {
+      if (!devicesRequested) enableDevices();
+    });
+  }
   toggleJitsiMicBtn.addEventListener("click", () => {
     try { api.executeCommand("toggleAudio"); } catch (_) {}
   });
