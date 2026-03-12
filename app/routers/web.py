@@ -613,12 +613,9 @@ def meeting_page(meeting_id: int, request: Request, db: Session = Depends(get_db
             "guest_join_url": _guest_join_url(request, meeting.guest_invite_token),
             "active_page": "meetings",
             "user": user,
-<<<<<<< HEAD
             "enable_server_transcription": settings.enable_server_transcription,
             "speech_recognition_lang": settings.speech_recognition_lang,
-=======
             "server_transcription_enabled": bool(ai_service.client),
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
         },
     )
 

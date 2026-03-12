@@ -147,11 +147,7 @@
       </div>
       <div id="chat-box" class="chat-box meeting-live-chatbox"></div>
       <div id="liveText" class="hint"></div>
-<<<<<<< HEAD
-    </article>
-=======
     </div>
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
   </section>
 </div>
 
@@ -160,12 +156,8 @@
   const meetingId = {{ meeting.id }};
   const agentName = {{ agent.name|tojson }};
   const interviewScript = {{ (agent.interview_script or "")|tojson }};
-<<<<<<< HEAD
-  const enableServerTranscription = {{ enable_server_transcription|tojson }};
+  const serverTranscriptionEnabled = {{ server_transcription_enabled|tojson }} && {{ enable_server_transcription|tojson }};
   const speechRecognitionLang = {{ speech_recognition_lang|tojson }};
-=======
-  const serverTranscriptionEnabled = {{ server_transcription_enabled|tojson }};
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
   const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
   const socket = new WebSocket(`${wsProtocol}://${location.host}/ws/${meetingId}`);
   const chatBox = document.getElementById("chat-box");
@@ -635,31 +627,17 @@
     }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-<<<<<<< HEAD
-      if (enableServerTranscription) {
-        speechFallbackMode = true;
-        micState.textContent = "Using fallback mic mode (server transcription)";
-      } else {
-        speechFallbackMode = false;
-        micState.textContent = "Browser speech recognition not supported. Use Chrome/Edge or enable server transcription.";
-      }
-=======
-      speechFallbackMode = true;
+      speechFallbackMode = !!serverTranscriptionEnabled;
       micState.textContent = serverTranscriptionEnabled
         ? "Using fallback mic mode (server transcription)"
         : "Voice input not supported in this browser. Use Chrome, or set OPENAI_API_KEY for server transcription.";
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
       return;
     }
 
     recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-<<<<<<< HEAD
-    recognition.lang = speechRecognitionLang || "en-US";
-=======
-    recognition.lang = navigator.language || "en-US";
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
+    recognition.lang = speechRecognitionLang || navigator.language || "en-US";
 
     recognition.onstart = () => {
       recognitionErrorCount = 0;
@@ -899,15 +877,6 @@
     parentNode: document.querySelector("#jitsi-container"),
     configOverwrite: {
       prejoinConfig: { enabled: true },
-<<<<<<< HEAD
-      startWithAudioMuted: false,
-      startWithVideoMuted: false,
-      disableDeepLinking: true,
-      toolbarButtons: [
-        "microphone",
-        "camera",
-        "hangup",
-=======
       disableDeepLinking: true,
       startWithAudioMuted: true,
       startWithVideoMuted: true,
@@ -917,23 +886,13 @@
       TOOLBAR_BUTTONS: [
         "microphone",
         "camera",
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
         "chat",
         "tileview",
         "fullscreen",
         "settings",
-<<<<<<< HEAD
-      ],
-    },
-    interfaceConfigOverwrite: {
-      TOOLBAR_ALWAYS_VISIBLE: true,
-      TOOLBAR_TIMEOUT: 600000,
-    },
-=======
         "hangup"
       ],
     },
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
   });
   api.addListener("videoConferenceJoined", () => {
     jitsiJoined = true;

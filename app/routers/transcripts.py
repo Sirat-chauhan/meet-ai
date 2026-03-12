@@ -5,10 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from sqlalchemy.orm import Session
 
 from ..config import settings
-<<<<<<< HEAD
-=======
 from ..database import SessionLocal
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
 from ..deps import get_current_user, get_db
 from ..models import Meeting, Transcript, TranscriptEmbedding, User
 from ..schemas import TranscriptCreateRequest, TranscriptResponse
@@ -101,12 +98,6 @@ async def transcribe_audio(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
     subscription_service.assert_can_add_transcript(current_user, db)
 
-<<<<<<< HEAD
-    if not settings.enable_server_transcription:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Server transcription is disabled (ENABLE_SERVER_TRANSCRIPTION=false).",
-=======
     form = await request.form()
     speaker = (form.get("speaker") or request.query_params.get("speaker") or "candidate").strip()
     audio = form.get("audio") or form.get("file")
@@ -117,7 +108,12 @@ async def transcribe_audio(
                 "Missing audio file upload (expected multipart field: audio). "
                 f"Got fields={sorted(list(form.keys()))} content_type={request.headers.get('content-type')}"
             ),
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
+        )
+
+    if not settings.enable_server_transcription:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Server transcription is disabled (ENABLE_SERVER_TRANSCRIPTION=false).",
         )
 
     if not ai_service.client:
@@ -127,13 +123,6 @@ async def transcribe_audio(
         )
 
     audio_bytes = await audio.read()
-<<<<<<< HEAD
-    transcript_result = ai_service.client.audio.transcriptions.create(
-        model=settings.openai_transcription_model,
-        file=(audio.filename or "audio.webm", audio_bytes, audio.content_type or "audio/webm"),
-    )
-    text = transcript_result.text
-=======
     if not audio_bytes:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -160,7 +149,6 @@ async def transcribe_audio(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Transcription failed.",
         ) from exc
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
 
     transcript = Transcript(meeting_id=meeting_id, speaker=speaker, text=text)
     db.add(transcript)

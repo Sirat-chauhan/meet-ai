@@ -367,11 +367,7 @@ select {
 .jitsi-stage { position: relative; }
 .jitsi-bot-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .meeting-jitsi-frame {
-<<<<<<< HEAD
-  height: clamp(380px, 70vh, 650px);
-=======
   height: clamp(360px, 64vh, 640px);
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
 }
 .guest-jitsi-frame {
   height: clamp(420px, 75vh, 720px);
@@ -539,11 +535,7 @@ select {
 
 .meeting-live-layout {
   display: grid;
-<<<<<<< HEAD
-  grid-template-columns: 1fr 360px;
-=======
   grid-template-columns: 1fr;
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
   gap: 12px;
   align-items: start;
 }
@@ -1173,14 +1165,6 @@ button.secondary-btn:hover { background: #e6ecf5; }
   }
   .meeting-live-bottom {
     grid-template-columns: 1fr;
-<<<<<<< HEAD
-  }
-  .meeting-live-side {
-    min-height: 140px;
-    position: static;
-    height: auto;
-=======
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
   }
   #deviceStatus {
     margin-left: 0;

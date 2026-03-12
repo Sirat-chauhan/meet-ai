@@ -71,20 +71,13 @@ class AIService:
         if not self.client:
             return self._local_interviewer_reply(system_prompt, conversation)
 
-<<<<<<< HEAD
         response = self._with_retries(
             lambda: self.client.chat.completions.create(
                 model=settings.openai_chat_model,
                 messages=[{"role": "system", "content": system_prompt}, *conversation],
                 temperature=temperature,
+                max_tokens=max(32, int(settings.openai_chat_max_tokens)),
             )
-=======
-        response = self.client.chat.completions.create(
-            model=settings.openai_chat_model,
-            messages=[{"role": "system", "content": system_prompt}, *conversation],
-            temperature=temperature,
-            max_tokens=max(32, int(settings.openai_chat_max_tokens)),
->>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
         )
         return response.choices[0].message.content or ""
 
