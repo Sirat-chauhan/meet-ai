@@ -85,6 +85,12 @@ def _guest_join_url(request: Request, invite_token: str | None) -> str:
 def _new_email_verification_token() -> str:
     return secrets.token_urlsafe(36)
 
+def _verified_redirect_url() -> str:
+    base = (settings.frontend_origin or settings.app_base_url or "").strip().rstrip("/")
+    if not base:
+        return "/login?message=Email+verified.+You+can+log+in+now."
+    return f"{base}/?verified=1"
+
 
 def _transcript_counts_by_meeting(db: Session, user_id: int) -> dict[int, int]:
     rows = (
@@ -123,7 +129,7 @@ def signup(
 ):
     normalized_email = (email or "").strip().lower()
     if is_supabase_auth_enabled():
-        redirect_to = f"{settings.app_base_url.rstrip('/')}/login?message={quote_plus('Email verified. You can log in now.')}"
+        redirect_to = _verified_redirect_url()
         try:
             auth_response = supabase_sign_up(normalized_email, password, email_redirect_to=redirect_to)
             auth_user = auth_response.get("user") or {"email": normalized_email}
@@ -285,7 +291,7 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
 @router.get("/verify-email")
 def verify_email(token: str, db: Session = Depends(get_db)):
     if is_supabase_auth_enabled():
-        return RedirectResponse("/login?message=Email+verified.+You+can+log+in+now.", status_code=302)
+        return RedirectResponse(_verified_redirect_url(), status_code=302)
 
     user = db.query(User).filter(User.email_verification_token == token).first()
     if not user:
@@ -294,7 +300,7 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     user.email_verification_token = None
     db.add(user)
     db.commit()
-    return RedirectResponse("/login?error=Email+verified.+You+can+log+in+now.", status_code=302)
+    return RedirectResponse(_verified_redirect_url(), status_code=302)
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -607,8 +613,12 @@ def meeting_page(meeting_id: int, request: Request, db: Session = Depends(get_db
             "guest_join_url": _guest_join_url(request, meeting.guest_invite_token),
             "active_page": "meetings",
             "user": user,
+<<<<<<< HEAD
             "enable_server_transcription": settings.enable_server_transcription,
             "speech_recognition_lang": settings.speech_recognition_lang,
+=======
+            "server_transcription_enabled": bool(ai_service.client),
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
         },
     )
 

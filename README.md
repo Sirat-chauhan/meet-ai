@@ -44,7 +44,10 @@ Important keys:
 - `OPENAI_API_KEY`: set this to use OpenAI for live interview intelligence
 - `OPENAI_BASE_URL` (optional): point the OpenAI SDK at an OpenAI-compatible provider (OpenRouter, Groq, Together, local, etc.)
 - `OPENAI_DEFAULT_HEADERS_JSON` (optional): JSON object string of headers forwarded to the OpenAI SDK (useful for OpenRouter attribution)
+<<<<<<< HEAD
 - `ENABLE_SERVER_TRANSCRIPTION=true|false`: controls the mic-recording fallback that posts audio to `/transcripts/transcribe`
+=======
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
 - `DATABASE_URL`: default local is SQLite (`sqlite:///./ai_meeting_v2.db`)
 - `AUTO_CREATE_TABLES=true`: easiest local mode
 - `FRONTEND_ORIGIN=http://localhost:5173`
@@ -84,6 +87,7 @@ When set, these features run on OpenAI:
 
 Note: If you use a third-party OpenAI-compatible provider, chat/summaries usually work. Embeddings and audio transcription depend on the provider.
 
+<<<<<<< HEAD
 ### Groq (or other OpenAI-compatible providers)
 You can run chat + summaries on providers like Groq by pointing the OpenAI SDK at their base URL and choosing a provider-supported model.
 
@@ -106,6 +110,8 @@ OPENAI_TRANSCRIPTION_MODEL=
 
 Voice note: the primary mic flow uses **browser speech recognition** (Web Speech API). For best results use Chrome/Edge and allow microphone permissions.
 
+=======
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
 ### Optional fallback mode
 If `OPENAI_API_KEY` is empty, the app still runs with local fallback logic for interview/summaries/search.
 

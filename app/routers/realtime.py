@@ -33,9 +33,11 @@ async def meeting_chat_websocket(websocket: WebSocket, meeting_id: int):
             rows = (
                 db.query(Message)
                 .filter(Message.meeting_id == meeting.id)
-                .order_by(Message.created_at.asc())
+                .order_by(Message.created_at.desc())
+                .limit(16)
                 .all()
             )
+            rows = list(reversed(rows))
             conversation = []
             for row in rows:
                 role = "assistant" if row.sender == "ai" else "user"
@@ -44,7 +46,12 @@ async def meeting_chat_websocket(websocket: WebSocket, meeting_id: int):
             system_prompt = (
                 f"Behavior: {agent.behavior_prompt}\n"
                 f"Personality: {agent.personality}\n"
-                f"Interview Script: {agent.interview_script or 'N/A'}"
+                f"Interview Script: {agent.interview_script or 'N/A'}\n\n"
+                "Response rules:\n"
+                "- Keep replies concise (max ~5 short sentences).\n"
+                "- Prefer bullet points when listing.\n"
+                "- Ask at most one question at the end.\n"
+                "- Avoid long introductions and filler."
             )
             try:
                 reply = ai_service.chat_reply(system_prompt, conversation, temperature=float(agent.temperature))

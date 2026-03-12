@@ -83,13 +83,61 @@
           </div>
         </div>
       </div>
+    </article>
+  </section>
+
+  <section class="meeting-live-bottom">
+    <div class="meeting-live-left">
+      <article class="card">
+        <div class="meeting-card-head">
+          <h3>Rolling Summary (Live)</h3>
+          <button id="refreshSummaryBtn" type="button">Refresh</button>
+        </div>
+        <div id="summaryBox" class="chat-box meeting-live-chatbox" style="min-height:180px;max-height:260px;"></div>
+      </article>
+
+      <details class="card meeting-collapsible">
+        <summary class="meeting-collapsible-summary">
+          <h3>Ask Meeting Memory</h3>
+          <span class="meeting-collapsible-chip" aria-hidden="true"></span>
+        </summary>
+        <div class="meeting-collapsible-body">
+          <div class="stack">
+            <textarea id="qaQuestion" rows="3" placeholder="What did we decide about timeline?"></textarea>
+            <button id="qaAskBtn" type="button">Ask</button>
+          </div>
+          <div id="qaAnswer" class="chat-box meeting-live-chatbox" style="min-height:180px;max-height:260px;"></div>
+        </div>
+      </details>
+
+      <details class="card meeting-collapsible" id="transcriptsPanel">
+        <summary class="meeting-collapsible-summary">
+          <h3>Transcripts</h3>
+          <span class="meeting-collapsible-chip" aria-hidden="true"></span>
+        </summary>
+        <div class="meeting-collapsible-body">
+          <ul id="transcriptList" class="clean-list meeting-transcript-list">
+            {% for row in transcripts %}
+              <li><strong>{{ row.speaker }}</strong>: {{ row.text }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </details>
+    </div>
+
+    <div class="meeting-live-right">
+      <div class="meeting-live-status-card">
+        <div class="meeting-live-user-badge">{{ (user.email[0:2]|upper) if user and user.email else 'JD' }}</div>
+        <div class="meeting-live-status-meta">
+          <div class="meeting-live-you">You</div>
+          <div id="micState">Muted</div>
+          <p id="ai-status">{{ agent.name }} connected</p>
+        </div>
+      </div>
 
       <div class="meeting-live-controls">
         <button id="startInterviewBtn" type="button">Start Interview</button>
-        <button id="toggleVoiceBtn" type="button">Voice: On</button>
         <button id="enableDevicesBtn" type="button">Enable Camera & Mic</button>
-        <button id="toggleJitsiMicBtn" type="button">Toggle Meeting Mic</button>
-        <button id="toggleJitsiCamBtn" type="button">Toggle Meeting Camera</button>
         <button id="micToggleBtn" type="button">Start Mic</button>
       </div>
 
@@ -99,7 +147,11 @@
       </div>
       <div id="chat-box" class="chat-box meeting-live-chatbox"></div>
       <div id="liveText" class="hint"></div>
+<<<<<<< HEAD
     </article>
+=======
+    </div>
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
   </section>
 </div>
 
@@ -108,20 +160,24 @@
   const meetingId = {{ meeting.id }};
   const agentName = {{ agent.name|tojson }};
   const interviewScript = {{ (agent.interview_script or "")|tojson }};
+<<<<<<< HEAD
   const enableServerTranscription = {{ enable_server_transcription|tojson }};
   const speechRecognitionLang = {{ speech_recognition_lang|tojson }};
+=======
+  const serverTranscriptionEnabled = {{ server_transcription_enabled|tojson }};
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
   const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
   const socket = new WebSocket(`${wsProtocol}://${location.host}/ws/${meetingId}`);
   const chatBox = document.getElementById("chat-box");
   const liveText = document.getElementById("liveText");
   const transcriptList = document.getElementById("transcriptList");
+  const transcriptsPanel = document.getElementById("transcriptsPanel");
   const refreshSummaryBtn = document.getElementById("refreshSummaryBtn");
   const summaryBox = document.getElementById("summaryBox");
   const qaQuestion = document.getElementById("qaQuestion");
   const qaAskBtn = document.getElementById("qaAskBtn");
   const qaAnswer = document.getElementById("qaAnswer");
   const startInterviewBtn = document.getElementById("startInterviewBtn");
-  const toggleVoiceBtn = document.getElementById("toggleVoiceBtn");
   const micToggleBtn = document.getElementById("micToggleBtn");
   const chatInput = document.getElementById("chatInput");
   const sendChatBtn = document.getElementById("sendChatBtn");
@@ -135,8 +191,6 @@
   const toggleTranscriptsBtn = document.getElementById("toggleTranscriptsBtn");
   const transcriptsPanel = document.getElementById("transcriptsPanel");
   const enableDevicesBtn = document.getElementById("enableDevicesBtn");
-  const toggleJitsiMicBtn = document.getElementById("toggleJitsiMicBtn");
-  const toggleJitsiCamBtn = document.getElementById("toggleJitsiCamBtn");
   const deviceStatus = document.getElementById("deviceStatus");
   const aiStatus = document.getElementById("ai-status");
   const aiStatusInline = document.getElementById("ai-status-inline");
@@ -144,14 +198,23 @@
   let interviewStarted = false;
   let isListening = false;
   let shouldListen = false;
-  let speechFallbackMode = false;
+  let speechFallbackMode = !!serverTranscriptionEnabled;
   let mediaRecorder = null;
+  let segmentTimer = null;
+  let transcribeChain = Promise.resolve();
   let mediaStream = null;
   let recognitionErrorCount = 0;
   let lastTranscriptAt = 0;
   let meetingEnded = false;
   let recognition = null;
   let rollingSummaryTimer = null;
+  let ttsActive = false;
+  let jitsiJoined = false;
+  let jitsiAudioMuted = true;
+  let jitsiVideoMuted = true;
+  let recorderMimeType = "";
+  const MIC_SEGMENT_MS = 6500;
+  let micPausedForTts = false;
 
   function setTranscriptsCollapsed(collapsed) {
     const isCollapsed = !!collapsed;
@@ -200,6 +263,7 @@
   }
 
   socket.onmessage = (event) => {
+    if (meetingEnded) return;
     chatBox.innerHTML += `<p><b>${agentName}:</b> ${event.data}</p>`;
     chatBox.scrollTop = chatBox.scrollHeight;
     saveTranscriptLine(agentName, event.data);
@@ -207,6 +271,7 @@
     aiStatusInline.textContent = "Speaking";
     speakText(event.data);
     setTimeout(() => {
+      if (meetingEnded) return;
       aiStatus.textContent = "AI interviewer connected";
       aiStatusInline.textContent = "Connected";
     }, 1200);
@@ -297,9 +362,30 @@
 
   function speakText(text) {
     if (!voiceEnabled || !window.speechSynthesis) return;
+    if (!text || !text.trim()) return;
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
+    utterance.rate = 0.9;
     utterance.pitch = 1;
+    utterance.onstart = () => {
+      ttsActive = true;
+      if (shouldListen && isListening) {
+        micPausedForTts = true;
+        clearMicTimers();
+        try {
+          if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+        } catch (_) {}
+      }
+    };
+    utterance.onend = () => {
+      ttsActive = false;
+      if (micPausedForTts) {
+        micPausedForTts = false;
+        if (shouldListen && isListening) {
+          clearMicTimers();
+          startMicSegmentRecorder();
+        }
+      }
+    };
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   }
@@ -357,11 +443,15 @@
 
   async function transcribeAudioChunk(blob) {
     if (!blob || blob.size === 0) return;
+    if (ttsActive) return;
+    const micSpeaker = "candidate";
+    const mime = (blob.type || "").toLowerCase();
+    const ext = mime.includes("ogg") ? "ogg" : "webm";
     const form = new FormData();
-    form.append("speaker", "candidate");
-    form.append("audio", blob, "speech.webm");
+    form.append("speaker", micSpeaker);
+    form.append("audio", blob, `speech.${ext}`);
     try {
-      const res = await fetch(`/meetings/${meetingId}/transcripts/transcribe`, {
+      const res = await fetch(`/meetings/${meetingId}/transcripts/transcribe?speaker=${encodeURIComponent(micSpeaker)}`, {
         method: "POST",
         credentials: "include",
         body: form,
@@ -371,8 +461,14 @@
         try {
           const err = await res.json();
           detail = err?.detail || detail;
-        } catch (_) {}
-        micState.textContent = `Mic error: ${detail}`;
+        } catch (_) {
+          try {
+            const txt = await res.text();
+            if (txt) detail = txt;
+          } catch (_) {}
+        }
+        console.error("Transcription error:", detail);
+        micState.textContent = "Mic error. Check permissions and try again.";
         return;
       }
       const data = await res.json();
@@ -380,7 +476,75 @@
       if (!text) return;
       lastTranscriptAt = Date.now();
       sendToAI(text);
-    } catch (_) {}
+    } catch (err) {
+      console.error("Transcription request failed:", err);
+      micState.textContent = "Mic error. Check permissions and try again.";
+    }
+  }
+
+  function clearMicTimers() {
+    if (segmentTimer) {
+      clearTimeout(segmentTimer);
+      segmentTimer = null;
+    }
+  }
+
+  function startMicSegmentRecorder() {
+    if (!shouldListen) return;
+    if (!mediaStream) return;
+
+    // If the AI is speaking, wait a moment to reduce echo in captured audio.
+    if (ttsActive) {
+      segmentTimer = setTimeout(startMicSegmentRecorder, 500);
+      return;
+    }
+
+    const preferredTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
+    const chosenType = preferredTypes.find((t) => {
+      try {
+        return MediaRecorder.isTypeSupported(t);
+      } catch (_) {
+        return false;
+      }
+    });
+    const recorderOpts = chosenType ? { mimeType: chosenType } : undefined;
+    recorderMimeType = chosenType || "";
+
+    const chunks = [];
+    mediaRecorder = new MediaRecorder(mediaStream, recorderOpts);
+    mediaRecorder.ondataavailable = (event) => {
+      if (!event?.data || event.data.size === 0) return;
+      chunks.push(event.data);
+    };
+    mediaRecorder.onstop = () => {
+      const blob = chunks.length ? new Blob(chunks, { type: chunks[0]?.type || recorderMimeType || "audio/webm" }) : null;
+      if (blob && blob.size >= 12_000 && shouldListen) {
+        transcribeChain = transcribeChain.then(() => transcribeAudioChunk(blob)).catch(() => {});
+      }
+      if (shouldListen) {
+        // Start next segment quickly.
+        segmentTimer = setTimeout(startMicSegmentRecorder, 150);
+      }
+    };
+    mediaRecorder.onerror = () => {
+      if (shouldListen) {
+        segmentTimer = setTimeout(startMicSegmentRecorder, 400);
+      }
+    };
+
+    try {
+      mediaRecorder.start();
+    } catch (_) {
+      // If start fails, retry.
+      segmentTimer = setTimeout(startMicSegmentRecorder, 500);
+      return;
+    }
+
+    segmentTimer = setTimeout(() => {
+      try {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+      } catch (_) {}
+    }, MIC_SEGMENT_MS);
   }
 
   async function startFallbackListening() {
@@ -389,23 +553,16 @@
       return;
     }
     try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(mediaStream);
-      mediaRecorder.ondataavailable = (event) => {
-        transcribeAudioChunk(event.data);
-      };
-      mediaRecorder.onstop = () => {
-        if (mediaStream) {
-          mediaStream.getTracks().forEach((track) => track.stop());
-        }
-        mediaStream = null;
-        mediaRecorder = null;
-      };
-      mediaRecorder.start(3500);
+      stopFallbackListening();
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
       isListening = true;
       shouldListen = true;
-      micState.textContent = "Listening (fallback transcription)...";
+      micState.textContent = "Listening...";
       micToggleBtn.textContent = "Stop Mic";
+      clearMicTimers();
+      startMicSegmentRecorder();
     } catch (_) {
       micState.textContent = "Microphone permission denied.";
     }
@@ -414,6 +571,8 @@
   function stopFallbackListening() {
     shouldListen = false;
     isListening = false;
+    clearMicTimers();
+    micPausedForTts = false;
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       try { mediaRecorder.stop(); } catch (_) {}
     }
@@ -422,6 +581,7 @@
       mediaStream = null;
     }
     mediaRecorder = null;
+    recorderMimeType = "";
     micState.textContent = "Mic off";
     micToggleBtn.textContent = "Start Mic";
   }
@@ -439,6 +599,9 @@
     if (!query) {
       liveText.textContent = "";
       return;
+    }
+    if (transcriptsPanel) {
+      transcriptsPanel.open = true;
     }
     liveText.textContent = visibleCount > 0
       ? `Found ${visibleCount} transcript line${visibleCount === 1 ? "" : "s"}`
@@ -465,8 +628,14 @@
   }
 
   function initSpeechRecognition() {
+    if (serverTranscriptionEnabled) {
+      speechFallbackMode = true;
+      micState.textContent = "Mic ready (server transcription)";
+      return;
+    }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
+<<<<<<< HEAD
       if (enableServerTranscription) {
         speechFallbackMode = true;
         micState.textContent = "Using fallback mic mode (server transcription)";
@@ -474,13 +643,23 @@
         speechFallbackMode = false;
         micState.textContent = "Browser speech recognition not supported. Use Chrome/Edge or enable server transcription.";
       }
+=======
+      speechFallbackMode = true;
+      micState.textContent = serverTranscriptionEnabled
+        ? "Using fallback mic mode (server transcription)"
+        : "Voice input not supported in this browser. Use Chrome, or set OPENAI_API_KEY for server transcription.";
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
       return;
     }
 
     recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
+<<<<<<< HEAD
     recognition.lang = speechRecognitionLang || "en-US";
+=======
+    recognition.lang = navigator.language || "en-US";
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
 
     recognition.onstart = () => {
       recognitionErrorCount = 0;
@@ -537,6 +716,7 @@
     };
 
     recognition.onresult = (event) => {
+      if (ttsActive) return;
       let interim = "";
       let finalText = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -555,7 +735,9 @@
   async function ensureMicPermission() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
       stream.getTracks().forEach((track) => track.stop());
       return true;
     } catch (_) {
@@ -571,6 +753,15 @@
     }
     meetingEnded = true;
     shouldListen = false;
+    voiceEnabled = false;
+    ttsActive = false;
+    micPausedForTts = false;
+    try {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+    } catch (_) {}
+    try {
+      if (socket && socket.readyState === WebSocket.OPEN) socket.close();
+    } catch (_) {}
     if (recognition && isListening) {
       try { recognition.stop(); } catch (_) {}
     }
@@ -592,13 +783,6 @@
   }
 
   startInterviewBtn.addEventListener("click", startInterview);
-  toggleVoiceBtn.addEventListener("click", () => {
-    voiceEnabled = !voiceEnabled;
-    toggleVoiceBtn.textContent = `Voice: ${voiceEnabled ? "On" : "Off"}`;
-    if (!voiceEnabled && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
-  });
 
   resetViewBtn.addEventListener("click", () => {
     // Hard reset is the most reliable way to recover from Jitsi panel/pin UI traps.
@@ -619,6 +803,10 @@
     }
   });
   micToggleBtn.addEventListener("click", () => {
+    if (speechFallbackMode && !serverTranscriptionEnabled) {
+      micState.textContent = "Voice input unavailable. Use Chrome, or set OPENAI_API_KEY.";
+      return;
+    }
     if (speechFallbackMode) {
       if (isListening) {
         stopFallbackListening();
@@ -711,6 +899,7 @@
     parentNode: document.querySelector("#jitsi-container"),
     configOverwrite: {
       prejoinConfig: { enabled: true },
+<<<<<<< HEAD
       startWithAudioMuted: false,
       startWithVideoMuted: false,
       disableDeepLinking: true,
@@ -718,23 +907,46 @@
         "microphone",
         "camera",
         "hangup",
+=======
+      disableDeepLinking: true,
+      startWithAudioMuted: true,
+      startWithVideoMuted: true,
+      toolbarConfig: { alwaysVisible: true }
+    },
+    interfaceConfigOverwrite: {
+      TOOLBAR_BUTTONS: [
+        "microphone",
+        "camera",
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
         "chat",
         "tileview",
         "fullscreen",
         "settings",
+<<<<<<< HEAD
       ],
     },
     interfaceConfigOverwrite: {
       TOOLBAR_ALWAYS_VISIBLE: true,
       TOOLBAR_TIMEOUT: 600000,
     },
+=======
+        "hangup"
+      ],
+    },
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
   });
   api.addListener("videoConferenceJoined", () => {
-    deviceStatus.textContent = "Joined meeting. Use toggles for camera/mic.";
+    jitsiJoined = true;
+    deviceStatus.textContent = "Joined meeting. Use the Jitsi toolbar for camera/mic.";
   });
   api.addListener("audioMuteStatusChanged", (event) => {
     if (!event) return;
+    jitsiAudioMuted = !!event.muted;
     deviceStatus.textContent = event.muted ? "Meeting mic is muted in Jitsi." : "Meeting mic is live in Jitsi.";
+  });
+  api.addListener("videoMuteStatusChanged", (event) => {
+    if (!event) return;
+    jitsiVideoMuted = !!event.muted;
   });
 
   async function enableDevices() {
@@ -743,20 +955,25 @@
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: true,
+      });
       stream.getTracks().forEach((track) => track.stop());
       deviceStatus.textContent = "Camera/Mic permission granted";
+      if (jitsiJoined) {
+        if (jitsiAudioMuted === true) {
+          try { api.executeCommand("toggleAudio"); } catch (_) {}
+        }
+        if (jitsiVideoMuted === true) {
+          try { api.executeCommand("toggleVideo"); } catch (_) {}
+        }
+      }
     } catch (_) {
       deviceStatus.textContent = "Camera/Mic blocked. Allow permissions in browser settings.";
     }
   }
   enableDevicesBtn.addEventListener("click", enableDevices);
-  toggleJitsiMicBtn.addEventListener("click", () => {
-    try { api.executeCommand("toggleAudio"); } catch (_) {}
-  });
-  toggleJitsiCamBtn.addEventListener("click", () => {
-    try { api.executeCommand("toggleVideo"); } catch (_) {}
-  });
 
   // Hidden second participant: joins same room as an AI interviewer bot.
   // This creates a real participant tile/icon in Jitsi without extra backend infra.
@@ -782,8 +999,6 @@
   botApi.addListener("videoConferenceJoined", () => {
     try {
       botApi.executeCommand("displayName", `${agentName} (AI)`);
-      botApi.executeCommand("toggleAudio");
-      botApi.executeCommand("toggleVideo");
       aiStatusInline.textContent = "Joined call";
     } catch (_) {}
   });

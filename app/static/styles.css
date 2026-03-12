@@ -367,7 +367,11 @@ select {
 .jitsi-stage { position: relative; }
 .jitsi-bot-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .meeting-jitsi-frame {
+<<<<<<< HEAD
   height: clamp(380px, 70vh, 650px);
+=======
+  height: clamp(360px, 64vh, 640px);
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
 }
 .guest-jitsi-frame {
   height: clamp(420px, 75vh, 720px);
@@ -468,7 +472,7 @@ select {
 }
 .meeting-live-header h2 {
   margin: 0;
-  font-size: 30px;
+  font-size: 28px;
   color: #f5fff9;
   min-width: 0;
   word-break: break-word;
@@ -535,7 +539,11 @@ select {
 
 .meeting-live-layout {
   display: grid;
+<<<<<<< HEAD
   grid-template-columns: 1fr 360px;
+=======
+  grid-template-columns: 1fr;
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
   gap: 12px;
   align-items: start;
 }
@@ -551,6 +559,108 @@ select {
   overflow: hidden;
   background: #06090e;
 }
+.meeting-live-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 12px;
+  margin-top: 8px;
+  align-items: start;
+}
+.meeting-live-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.meeting-live-right {
+  background: #02060a;
+  border: 1px solid #112129;
+  border-radius: 12px;
+  padding: 12px;
+}
+.meeting-live-status-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  background: #040f0b;
+  border: 1px solid #1a4331;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.meeting-live-status-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.meeting-live-status-card #ai-status {
+  text-align: left;
+}
+.meeting-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.meeting-card-head h3 {
+  margin: 0;
+}
+.meeting-card-head button {
+  background: #f6f8fb;
+  border: 1px solid #dfe5ee;
+  color: #0b1f33;
+}
+.meeting-card-head button:hover {
+  background: #eaf0f9;
+}
+.meeting-collapsible {
+  padding: 12px;
+}
+.meeting-collapsible-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.meeting-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+.meeting-collapsible-summary h3 {
+  margin: 0;
+}
+.meeting-collapsible-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #06150f;
+  border: 1px solid #21543d;
+  color: #d4edde;
+  min-width: 64px;
+}
+.meeting-collapsible-chip::after {
+  content: "Show";
+}
+.meeting-collapsible[open] .meeting-collapsible-chip::after {
+  content: "Hide";
+}
+.meeting-collapsible-body {
+  margin-top: 10px;
+}
+.meeting-transcript-list {
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
 .meeting-live-controls {
   display: flex;
   flex-wrap: wrap;
@@ -562,10 +672,10 @@ select {
   border: 1px solid #214a36;
   color: #bde5cd;
   border-radius: 999px;
-  padding: 8px 12px;
+  padding: 7px 11px;
   width: auto;
   flex: 0 1 auto;
-  min-height: 40px;
+  min-height: 36px;
 }
 .meeting-live-controls button:hover { background: #143224; }
 .meeting-live-chatrow {
@@ -586,6 +696,10 @@ select {
   background: #040f0b;
   border: 1px solid #1a4331;
   color: #dff5e8;
+}
+.meeting-live-right .chat-box {
+  min-height: 180px;
+  max-height: 220px;
 }
 .meeting-live-side {
   background: #02060a;
@@ -1059,11 +1173,14 @@ button.secondary-btn:hover { background: #e6ecf5; }
   }
   .meeting-live-bottom {
     grid-template-columns: 1fr;
+<<<<<<< HEAD
   }
   .meeting-live-side {
     min-height: 140px;
     position: static;
     height: auto;
+=======
+>>>>>>> 1a9d697 (Improve meeting UI and mic transcription)
   }
   #deviceStatus {
     margin-left: 0;
