@@ -37,56 +37,6 @@
   </section>
 
   <section class="meeting-live-bottom">
-    <aside class="meeting-live-left">
-      <details class="meeting-accordion" open>
-        <summary class="meeting-accordion-summary">
-          <span>Rolling Summary (Live)</span>
-          <button id="refreshSummaryBtn" type="button" class="secondary-btn meeting-accordion-action">Refresh</button>
-        </summary>
-        <div id="summaryBox" class="chat-box meeting-live-chatbox meeting-side-chatbox"></div>
-      </details>
-
-      <details class="meeting-accordion">
-        <summary class="meeting-accordion-summary">
-          <span>Ask Meeting Memory</span>
-        </summary>
-        <div class="stack">
-          <textarea id="qaQuestion" rows="3" placeholder="What did we decide about timeline?"></textarea>
-          <button id="qaAskBtn" type="button">Ask</button>
-        </div>
-        <div id="qaAnswer" class="chat-box meeting-live-chatbox meeting-side-chatbox"></div>
-      </details>
-
-      <details class="meeting-accordion">
-        <summary class="meeting-accordion-summary transcripts-header">
-          <span>Transcripts</span>
-          <button id="toggleTranscriptsBtn" type="button" class="secondary-btn meeting-accordion-action" aria-expanded="true">Collapse</button>
-        </summary>
-        <div id="transcriptsPanel">
-          <ul id="transcriptList" class="clean-list">
-            {% for row in transcripts %}
-              <li><strong>{{ row.speaker }}</strong>: {{ row.text }}</li>
-            {% endfor %}
-          </ul>
-        </div>
-      </details>
-    </aside>
-
-    <article class="meeting-live-right">
-      <div class="meeting-live-side meeting-live-side-inline">
-        <div class="meeting-side-top">
-          <div class="meeting-live-user-badge">{{ (user.email[0:2]|upper) if user and user.email else 'JD' }}</div>
-          <div class="meeting-side-meta">
-            <div class="meeting-live-you">You</div>
-            <div id="micState">Muted</div>
-            <p id="ai-status">{{ agent.name }} connected</p>
-          </div>
-        </div>
-      </div>
-    </article>
-  </section>
-
-  <section class="meeting-live-bottom">
     <div class="meeting-live-left">
       <article class="card">
         <div class="meeting-card-head">
