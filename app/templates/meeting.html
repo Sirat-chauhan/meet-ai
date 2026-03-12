@@ -820,43 +820,87 @@
     }
   }, 5000);
 
-  const api = new JitsiMeetExternalAPI("{{ jitsi_domain }}", {
-    roomName: "{{ meeting.jitsi_room_name }}",
-    width: "100%",
-    height: "100%",
-    parentNode: document.querySelector("#jitsi-container"),
-    configOverwrite: {
-      prejoinConfig: { enabled: true },
-      disableDeepLinking: true,
-      startWithAudioMuted: true,
-      startWithVideoMuted: true,
-      toolbarConfig: { alwaysVisible: true }
-    },
-    interfaceConfigOverwrite: {
-      TOOLBAR_BUTTONS: [
-        "microphone",
-        "camera",
-        "chat",
-        "tileview",
-        "fullscreen",
-        "settings",
-        "hangup"
-      ],
-    },
-  });
-  api.addListener("videoConferenceJoined", () => {
-    jitsiJoined = true;
-    deviceStatus.textContent = "Joined meeting. Use the Jitsi toolbar for camera/mic.";
-  });
-  api.addListener("audioMuteStatusChanged", (event) => {
-    if (!event) return;
-    jitsiAudioMuted = !!event.muted;
-    deviceStatus.textContent = event.muted ? "Meeting mic is muted in Jitsi." : "Meeting mic is live in Jitsi.";
-  });
-  api.addListener("videoMuteStatusChanged", (event) => {
-    if (!event) return;
-    jitsiVideoMuted = !!event.muted;
-  });
+  let api = null;
+  let botApi = null;
+
+  function initJitsi() {
+    if (!window.JitsiMeetExternalAPI) {
+      deviceStatus.textContent = "Jitsi failed to load (external_api.js blocked). Disable adblock/shields and reload.";
+      return;
+    }
+    try {
+      api = new JitsiMeetExternalAPI("{{ jitsi_domain }}", {
+        roomName: "{{ meeting.jitsi_room_name }}",
+        width: "100%",
+        height: "100%",
+        parentNode: document.querySelector("#jitsi-container"),
+        configOverwrite: {
+          prejoinConfig: { enabled: true },
+          disableDeepLinking: true,
+          startWithAudioMuted: true,
+          startWithVideoMuted: true,
+          toolbarConfig: { alwaysVisible: true }
+        },
+        interfaceConfigOverwrite: {
+          TOOLBAR_BUTTONS: [
+            "microphone",
+            "camera",
+            "chat",
+            "tileview",
+            "fullscreen",
+            "settings",
+            "hangup"
+          ],
+        },
+      });
+      api.addListener("videoConferenceJoined", () => {
+        jitsiJoined = true;
+        deviceStatus.textContent = "Joined meeting. Use the Jitsi toolbar for camera/mic.";
+      });
+      api.addListener("audioMuteStatusChanged", (event) => {
+        if (!event) return;
+        jitsiAudioMuted = !!event.muted;
+        deviceStatus.textContent = event.muted ? "Meeting mic is muted in Jitsi." : "Meeting mic is live in Jitsi.";
+      });
+      api.addListener("videoMuteStatusChanged", (event) => {
+        if (!event) return;
+        jitsiVideoMuted = !!event.muted;
+      });
+
+      // Hidden second participant: joins same room as an AI interviewer bot.
+      // This creates a real participant tile/icon in Jitsi without extra backend infra.
+      botApi = new JitsiMeetExternalAPI("{{ jitsi_domain }}", {
+        roomName: "{{ meeting.jitsi_room_name }}",
+        width: 1,
+        height: 1,
+        parentNode: document.querySelector("#jitsi-bot-container"),
+        userInfo: { displayName: `${agentName} (AI)` },
+        configOverwrite: {
+          startWithAudioMuted: true,
+          startWithVideoMuted: true,
+          disableDeepLinking: true,
+          prejoinConfig: { enabled: false },
+          enableNoAudioDetection: false,
+          enableNoisyMicDetection: false
+        },
+        interfaceConfigOverwrite: {
+          TOOLBAR_BUTTONS: []
+        }
+      });
+
+      botApi.addListener("videoConferenceJoined", () => {
+        try {
+          botApi.executeCommand("displayName", `${agentName} (AI)`);
+          aiStatusInline.textContent = "Joined call";
+        } catch (_) {}
+      });
+    } catch (err) {
+      console.error("Jitsi init failed:", err);
+      deviceStatus.textContent = "Jitsi failed to start. Check browser console and reload.";
+    }
+  }
+
+  initJitsi();
 
   async function enableDevices() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -871,10 +915,10 @@
       stream.getTracks().forEach((track) => track.stop());
       deviceStatus.textContent = "Camera/Mic permission granted";
       if (jitsiJoined) {
-        if (jitsiAudioMuted === true) {
+        if (jitsiAudioMuted === true && api) {
           try { api.executeCommand("toggleAudio"); } catch (_) {}
         }
-        if (jitsiVideoMuted === true) {
+        if (jitsiVideoMuted === true && api) {
           try { api.executeCommand("toggleVideo"); } catch (_) {}
         }
       }
@@ -883,33 +927,5 @@
     }
   }
   enableDevicesBtn.addEventListener("click", enableDevices);
-
-  // Hidden second participant: joins same room as an AI interviewer bot.
-  // This creates a real participant tile/icon in Jitsi without extra backend infra.
-  const botApi = new JitsiMeetExternalAPI("{{ jitsi_domain }}", {
-    roomName: "{{ meeting.jitsi_room_name }}",
-    width: 1,
-    height: 1,
-    parentNode: document.querySelector("#jitsi-bot-container"),
-    userInfo: { displayName: `${agentName} (AI)` },
-    configOverwrite: {
-      startWithAudioMuted: true,
-      startWithVideoMuted: true,
-      disableDeepLinking: true,
-      prejoinConfig: { enabled: false },
-      enableNoAudioDetection: false,
-      enableNoisyMicDetection: false
-    },
-    interfaceConfigOverwrite: {
-      TOOLBAR_BUTTONS: []
-    }
-  });
-
-  botApi.addListener("videoConferenceJoined", () => {
-    try {
-      botApi.executeCommand("displayName", `${agentName} (AI)`);
-      aiStatusInline.textContent = "Joined call";
-    } catch (_) {}
-  });
 </script>
 {% endblock %}
