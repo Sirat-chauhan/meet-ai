@@ -92,6 +92,19 @@ def _verified_redirect_url() -> str:
     return f"{base}/?verified=1"
 
 
+def _normalize_signup_error_message(message: str) -> str:
+    normalized = (message or "").strip()
+    lowered = normalized.lower()
+    if (
+        "for security purposes" in lowered
+        or "request this after" in lowered
+        or "rate limit" in lowered
+        or "email rate limit exceeded" in lowered
+    ):
+        return "Confirmation mail has been sent. Please check your email and confirm your account."
+    return normalized
+
+
 def _transcript_counts_by_meeting(db: Session, user_id: int) -> dict[int, int]:
     rows = (
         db.query(Transcript.meeting_id, func.count(Transcript.id))
@@ -139,7 +152,13 @@ def signup(
                 status_code=302,
             )
         except SupabaseAuthError as exc:
-            message = quote_plus(exc.message)
+            normalized_message = _normalize_signup_error_message(exc.message)
+            if normalized_message.startswith("Confirmation mail has been sent."):
+                return RedirectResponse(
+                    "/login?message=Confirmation+mail+has+been+sent.+Please+check+your+email+and+confirm+your+account.",
+                    status_code=302,
+                )
+            message = quote_plus(normalized_message)
             return RedirectResponse(f"/signup?error={message}", status_code=302)
 
     existing = db.query(User).filter(User.email == normalized_email).first()

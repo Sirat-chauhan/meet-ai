@@ -19,6 +19,26 @@ from ..services.supabase_auth_service import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _verified_redirect_url() -> str:
+    base = (settings.frontend_origin or settings.app_base_url or "").strip().rstrip("/")
+    if not base:
+        return "/login?message=Email+verified.+You+can+log+in+now."
+    return f"{base}/?verified=1"
+
+
+def _normalize_signup_error_message(message: str) -> str:
+    normalized = (message or "").strip()
+    lowered = normalized.lower()
+    if (
+        "for security purposes" in lowered
+        or "request this after" in lowered
+        or "rate limit" in lowered
+        or "email rate limit exceeded" in lowered
+    ):
+        return "Confirmation mail has been sent. Please check your email and confirm your account."
+    return normalized
+
+
 @router.post("/signup", response_model=UserResponse)
 def signup(
     payload: AuthSignupRequest,
@@ -28,14 +48,18 @@ def signup(
     normalized_email = (payload.email or "").strip().lower()
     if is_supabase_auth_enabled():
         try:
-            redirect_to = f"{settings.app_base_url.rstrip('/')}/login?message=Email+verified.+You+can+log+in+now."
-            auth_response = sign_up(normalized_email, payload.password, email_redirect_to=redirect_to)
+            auth_response = sign_up(
+                normalized_email,
+                payload.password,
+                email_redirect_to=_verified_redirect_url(),
+            )
             auth_user = auth_response.get("user") or {"email": normalized_email}
             return sync_local_user(db, auth_user)
         except SupabaseAuthError as exc:
+            message = _normalize_signup_error_message(exc.message)
             if exc.status_code in {400, 422}:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from exc
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
 
     existing = db.query(User).filter(User.email == normalized_email).first()
     if existing:

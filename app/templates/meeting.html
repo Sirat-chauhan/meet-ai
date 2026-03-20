@@ -141,7 +141,6 @@
   let shouldListen = false;
   let speechFallbackMode = !!serverTranscriptionEnabled;
   let mediaRecorder = null;
-  let segmentTimer = null;
   let transcribeChain = Promise.resolve();
   let mediaStream = null;
   let recognitionErrorCount = 0;
@@ -150,12 +149,82 @@
   let recognition = null;
   let rollingSummaryTimer = null;
   let ttsActive = false;
+  let ttsStartedAt = 0;
   let jitsiJoined = false;
   let jitsiAudioMuted = true;
   let jitsiVideoMuted = true;
   let recorderMimeType = "";
-  const MIC_SEGMENT_MS = 6500;
   let micPausedForTts = false;
+  const UTTERANCE_FINAL_SILENCE_MS = 1400;
+  const UTTERANCE_INTERIM_SILENCE_MS = 2000;
+  const UTTERANCE_MAX_MS = 30000;
+  let pendingUtteranceText = "";
+  let pendingInterimUtteranceText = "";
+  let pendingUtteranceTimer = null;
+
+  // Server transcription (MediaRecorder) utterance recording + VAD
+  let vadTimer = null;
+  let vadAudioCtx = null;
+  let vadAnalyser = null;
+  let vadSource = null;
+  let vadLastVoiceAt = 0;
+  let vadUtteranceStartedAt = 0;
+  let vadHasVoice = false;
+  let vadStopRequested = false;
+  let vadMaxTimer = null;
+  let vadChunks = [];
+  const VAD_CHECK_MS = 120;
+  const VAD_RMS_THRESHOLD = 0.012;
+  const VAD_INTERRUPT_RMS_THRESHOLD = 0.02;
+  const MIN_INTERRUPT_TEXT_LENGTH = 10;
+
+  function shouldInterruptForText(text) {
+    const normalized = (text || "").trim();
+    if (!normalized) return false;
+    if (normalized.length >= MIN_INTERRUPT_TEXT_LENGTH) return true;
+    return normalized.split(/\s+/).filter(Boolean).length >= 2;
+  }
+
+  function interruptAssistantPlayback(reason) {
+    if (!ttsActive || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+    } catch (_) {}
+    ttsActive = false;
+    ttsStartedAt = 0;
+    micPausedForTts = false;
+    aiStatus.textContent = "Listening to you";
+    aiStatusInline.textContent = "Listening";
+    if (speechFallbackMode && shouldListen && isListening) {
+      setTimeout(() => {
+        if (!shouldListen || !isListening || mediaRecorder) return;
+        startVadRecorder();
+      }, 100);
+    }
+  }
+
+  function clearPendingUtteranceTimer() {
+    if (!pendingUtteranceTimer) return;
+    clearTimeout(pendingUtteranceTimer);
+    pendingUtteranceTimer = null;
+  }
+
+  function flushPendingUtterance(reason) {
+    clearPendingUtteranceTimer();
+    const text = (pendingUtteranceText || pendingInterimUtteranceText || "").trim();
+    pendingUtteranceText = "";
+    pendingInterimUtteranceText = "";
+    if (!text) return;
+    interruptAssistantPlayback(reason);
+    lastTranscriptAt = Date.now();
+    liveText.textContent = "Processing...";
+    sendToAI(text);
+  }
+
+  function schedulePendingUtteranceFlush(reason, delayMs = UTTERANCE_FINAL_SILENCE_MS) {
+    clearPendingUtteranceTimer();
+    pendingUtteranceTimer = setTimeout(() => flushPendingUtterance(reason), delayMs);
+  }
 
   function setTranscriptsCollapsed(collapsed) {
     const isCollapsed = !!collapsed;
@@ -309,22 +378,14 @@
     utterance.pitch = 1;
     utterance.onstart = () => {
       ttsActive = true;
-      if (shouldListen && isListening) {
-        micPausedForTts = true;
-        clearMicTimers();
-        try {
-          if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-        } catch (_) {}
-      }
+      ttsStartedAt = Date.now();
+      micPausedForTts = false;
     };
     utterance.onend = () => {
       ttsActive = false;
-      if (micPausedForTts) {
-        micPausedForTts = false;
-        if (shouldListen && isListening) {
-          clearMicTimers();
-          startMicSegmentRecorder();
-        }
+      ttsStartedAt = 0;
+      if (shouldListen && isListening && speechFallbackMode && !mediaRecorder) {
+        startVadRecorder();
       }
     };
     window.speechSynthesis.cancel();
@@ -384,7 +445,6 @@
 
   async function transcribeAudioChunk(blob) {
     if (!blob || blob.size === 0) return;
-    if (ttsActive) return;
     const micSpeaker = "candidate";
     const mime = (blob.type || "").toLowerCase();
     const ext = mime.includes("ogg") ? "ogg" : "webm";
@@ -409,37 +469,25 @@
           } catch (_) {}
         }
         console.error("Transcription error:", detail);
-        micState.textContent = "Mic error. Check permissions and try again.";
+        micState.textContent = `Mic error: ${detail}`;
         return;
       }
       const data = await res.json();
       const text = (data?.text || "").trim();
       if (!text) return;
-      lastTranscriptAt = Date.now();
-      sendToAI(text);
+      if (ttsActive && shouldInterruptForText(text)) {
+        interruptAssistantPlayback("server-transcription");
+      }
+      pendingUtteranceText = `${pendingUtteranceText || ""} ${text}`.trim();
+      pendingInterimUtteranceText = "";
+      schedulePendingUtteranceFlush("server-transcription", UTTERANCE_FINAL_SILENCE_MS);
     } catch (err) {
       console.error("Transcription request failed:", err);
-      micState.textContent = "Mic error. Check permissions and try again.";
+      micState.textContent = "Mic error. Could not reach transcription service.";
     }
   }
 
-  function clearMicTimers() {
-    if (segmentTimer) {
-      clearTimeout(segmentTimer);
-      segmentTimer = null;
-    }
-  }
-
-  function startMicSegmentRecorder() {
-    if (!shouldListen) return;
-    if (!mediaStream) return;
-
-    // If the AI is speaking, wait a moment to reduce echo in captured audio.
-    if (ttsActive) {
-      segmentTimer = setTimeout(startMicSegmentRecorder, 500);
-      return;
-    }
-
+  function getRecorderOpts() {
     const preferredTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
     const chosenType = preferredTypes.find((t) => {
       try {
@@ -450,42 +498,142 @@
     });
     const recorderOpts = chosenType ? { mimeType: chosenType } : undefined;
     recorderMimeType = chosenType || "";
+    return recorderOpts;
+  }
 
-    const chunks = [];
-    mediaRecorder = new MediaRecorder(mediaStream, recorderOpts);
+  function stopVadRecorder() {
+    if (vadTimer) {
+      clearInterval(vadTimer);
+      vadTimer = null;
+    }
+    if (vadMaxTimer) {
+      clearTimeout(vadMaxTimer);
+      vadMaxTimer = null;
+    }
+    try { if (vadSource) vadSource.disconnect(); } catch (_) {}
+    try { if (vadAnalyser) vadAnalyser.disconnect(); } catch (_) {}
+    vadAnalyser = null;
+    vadSource = null;
+    vadLastVoiceAt = 0;
+    vadUtteranceStartedAt = 0;
+    vadHasVoice = false;
+    vadStopRequested = true;
+    try {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    } catch (_) {}
+  }
+
+  function finalizeVadUtteranceAndRestart() {
+    if (!shouldListen || !isListening) return;
+    stopVadRecorder();
+    setTimeout(() => {
+      if (!shouldListen || !isListening) return;
+      startVadRecorder();
+    }, 150);
+  }
+
+  function startVadRecorder() {
+    if (!shouldListen) return;
+    if (!mediaStream) return;
+
+    const recorderOpts = getRecorderOpts();
+    vadChunks = [];
+    vadStopRequested = false;
+    vadHasVoice = false;
+    vadLastVoiceAt = Date.now();
+    vadUtteranceStartedAt = Date.now();
+
+    try {
+      mediaRecorder = new MediaRecorder(mediaStream, recorderOpts);
+    } catch (_) {
+      micState.textContent = "Mic error. Could not start recording.";
+      return;
+    }
+
     mediaRecorder.ondataavailable = (event) => {
       if (!event?.data || event.data.size === 0) return;
-      chunks.push(event.data);
+      vadChunks.push(event.data);
     };
     mediaRecorder.onstop = () => {
-      const blob = chunks.length ? new Blob(chunks, { type: chunks[0]?.type || recorderMimeType || "audio/webm" }) : null;
-      if (blob && blob.size >= 12_000 && shouldListen) {
+      const blob = vadChunks.length ? new Blob(vadChunks, { type: vadChunks[0]?.type || recorderMimeType || "audio/webm" }) : null;
+      const shouldTranscribe = blob && blob.size >= 12_000 && shouldListen && vadHasVoice;
+      vadChunks = [];
+      if (shouldTranscribe) {
         transcribeChain = transcribeChain.then(() => transcribeAudioChunk(blob)).catch(() => {});
       }
-      if (shouldListen) {
-        // Start next segment quickly.
-        segmentTimer = setTimeout(startMicSegmentRecorder, 150);
+      if (shouldListen && isListening && !vadStopRequested) {
+        setTimeout(startVadRecorder, 150);
       }
     };
     mediaRecorder.onerror = () => {
-      if (shouldListen) {
-        segmentTimer = setTimeout(startMicSegmentRecorder, 400);
+      if (shouldListen && isListening) {
+        setTimeout(startVadRecorder, 400);
       }
     };
 
     try {
-      mediaRecorder.start();
+      // Use a small timeslice so we can stop quickly once we detect silence.
+      mediaRecorder.start(250);
     } catch (_) {
-      // If start fails, retry.
-      segmentTimer = setTimeout(startMicSegmentRecorder, 500);
+      setTimeout(startVadRecorder, 500);
       return;
     }
 
-    segmentTimer = setTimeout(() => {
+    try {
+      if (!vadAudioCtx) vadAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      try { if (vadSource) vadSource.disconnect(); } catch (_) {}
+      try { if (vadAnalyser) vadAnalyser.disconnect(); } catch (_) {}
+      vadSource = vadAudioCtx.createMediaStreamSource(mediaStream);
+      vadAnalyser = vadAudioCtx.createAnalyser();
+      vadAnalyser.fftSize = 2048;
+      vadSource.connect(vadAnalyser);
+    } catch (_) {
+      // If AudioContext fails, fall back to fixed-length behavior by transcribing on stop.
+      vadAnalyser = null;
+      vadSource = null;
+    }
+
+    const buf = new Uint8Array(2048);
+    vadMaxTimer = setTimeout(() => {
+      if (!shouldListen || !isListening) return;
+      if (!vadAnalyser) {
+        // Best-effort flush when VAD is unavailable.
+        vadHasVoice = true;
+        finalizeVadUtteranceAndRestart();
+      }
+    }, UTTERANCE_MAX_MS);
+    vadTimer = setInterval(() => {
+      if (!shouldListen || !isListening) return;
+      if (!vadAnalyser) return;
+
       try {
-        if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-      } catch (_) {}
-    }, MIC_SEGMENT_MS);
+        vadAnalyser.getByteTimeDomainData(buf);
+      } catch (_) {
+        return;
+      }
+
+      let sumSq = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const v = (buf[i] - 128) / 128;
+        sumSq += v * v;
+      }
+      const rms = Math.sqrt(sumSq / buf.length);
+      const now = Date.now();
+      if (rms >= VAD_RMS_THRESHOLD) {
+        if (ttsActive && rms >= VAD_INTERRUPT_RMS_THRESHOLD && now - ttsStartedAt >= 300) {
+          interruptAssistantPlayback("vad-barge-in");
+        }
+        vadLastVoiceAt = now;
+        vadHasVoice = true;
+        return;
+      }
+
+      const silentForMs = now - vadLastVoiceAt;
+      const utteranceForMs = now - vadUtteranceStartedAt;
+      if (vadHasVoice && (silentForMs >= UTTERANCE_FINAL_SILENCE_MS || utteranceForMs >= UTTERANCE_MAX_MS)) {
+        finalizeVadUtteranceAndRestart();
+      }
+    }, VAD_CHECK_MS);
   }
 
   async function startFallbackListening() {
@@ -502,8 +650,7 @@
       shouldListen = true;
       micState.textContent = "Listening...";
       micToggleBtn.textContent = "Stop Mic";
-      clearMicTimers();
-      startMicSegmentRecorder();
+      startVadRecorder();
     } catch (_) {
       micState.textContent = "Microphone permission denied.";
     }
@@ -512,8 +659,9 @@
   function stopFallbackListening() {
     shouldListen = false;
     isListening = false;
-    clearMicTimers();
     micPausedForTts = false;
+    flushPendingUtterance("mic-off");
+    stopVadRecorder();
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       try { mediaRecorder.stop(); } catch (_) {}
     }
@@ -523,6 +671,10 @@
     }
     mediaRecorder = null;
     recorderMimeType = "";
+    if (vadAudioCtx) {
+      try { vadAudioCtx.close(); } catch (_) {}
+      vadAudioCtx = null;
+    }
     micState.textContent = "Mic off";
     micToggleBtn.textContent = "Start Mic";
   }
@@ -569,11 +721,6 @@
   }
 
   function initSpeechRecognition() {
-    if (serverTranscriptionEnabled) {
-      speechFallbackMode = true;
-      micState.textContent = "Mic ready (server transcription)";
-      return;
-    }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       speechFallbackMode = !!serverTranscriptionEnabled;
@@ -584,6 +731,7 @@
     }
 
     recognition = new SpeechRecognition();
+    speechFallbackMode = false;
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = speechRecognitionLang || navigator.language || "en-US";
@@ -608,6 +756,7 @@
         }, 250);
         return;
       }
+      flushPendingUtterance("mic-off");
       micState.textContent = "Mic off";
       micToggleBtn.textContent = "Start Mic";
     };
@@ -643,7 +792,6 @@
     };
 
     recognition.onresult = (event) => {
-      if (ttsActive) return;
       let interim = "";
       let finalText = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -651,10 +799,19 @@
         if (event.results[i].isFinal) finalText += text + " ";
         else interim += text;
       }
+      if (ttsActive && shouldInterruptForText(finalText || interim)) {
+        interruptAssistantPlayback("speech-recognition");
+      }
       liveText.textContent = interim ? `Listening: ${interim}` : "";
       if (finalText.trim()) {
-        lastTranscriptAt = Date.now();
-        sendToAI(finalText.trim());
+        pendingUtteranceText = `${pendingUtteranceText || ""} ${finalText.trim()}`.trim();
+        pendingInterimUtteranceText = "";
+        schedulePendingUtteranceFlush("speech-recognition-final", UTTERANCE_FINAL_SILENCE_MS);
+      }
+      if (interim) {
+        pendingInterimUtteranceText = interim.trim();
+        // Keep waiting while speech is ongoing.
+        schedulePendingUtteranceFlush("speech-recognition-interim", UTTERANCE_INTERIM_SILENCE_MS);
       }
     };
   }
@@ -822,6 +979,32 @@
   let api = null;
   let botApi = null;
   let devicesRequested = false;
+  let devicesPermissionGranted = false;
+
+  function applyJitsiIframePermissions(instance, allowCamera) {
+    if (!instance || typeof instance.getIFrame !== "function") return;
+    try {
+      const iframe = instance.getIFrame();
+      if (!iframe) return;
+      iframe.setAttribute(
+        "allow",
+        allowCamera
+          ? "camera; microphone; fullscreen; display-capture; autoplay"
+          : "microphone; fullscreen; autoplay"
+      );
+      iframe.setAttribute("allowfullscreen", "true");
+    } catch (_) {}
+  }
+
+  function syncJitsiDevicesAfterJoin() {
+    if (!devicesPermissionGranted || !jitsiJoined || !api) return;
+    if (jitsiAudioMuted === true) {
+      try { api.executeCommand("toggleAudio"); } catch (_) {}
+    }
+    if (jitsiVideoMuted === true) {
+      try { api.executeCommand("toggleVideo"); } catch (_) {}
+    }
+  }
 
   function initJitsi() {
     if (!window.JitsiMeetExternalAPI) {
@@ -853,9 +1036,11 @@
           ],
         },
       });
+      applyJitsiIframePermissions(api, true);
       api.addListener("videoConferenceJoined", () => {
         jitsiJoined = true;
         deviceStatus.textContent = "Joined meeting. Use the Jitsi toolbar for camera/mic.";
+        syncJitsiDevicesAfterJoin();
       });
       api.addListener("audioMuteStatusChanged", (event) => {
         if (!event) return;
@@ -887,6 +1072,7 @@
           TOOLBAR_BUTTONS: []
         }
       });
+      applyJitsiIframePermissions(botApi, false);
 
       botApi.addListener("videoConferenceJoined", () => {
         try {
@@ -907,6 +1093,7 @@
     devicesRequested = true;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       deviceStatus.textContent = "Browser does not support camera/mic APIs";
+      devicesRequested = false;
       return;
     }
     try {
@@ -915,17 +1102,14 @@
         video: true,
       });
       stream.getTracks().forEach((track) => track.stop());
-      deviceStatus.textContent = "Camera/Mic permission granted";
-      if (jitsiJoined) {
-        if (jitsiAudioMuted === true && api) {
-          try { api.executeCommand("toggleAudio"); } catch (_) {}
-        }
-        if (jitsiVideoMuted === true && api) {
-          try { api.executeCommand("toggleVideo"); } catch (_) {}
-        }
-      }
+      devicesPermissionGranted = true;
+      deviceStatus.textContent = jitsiJoined
+        ? "Camera/Mic permission granted"
+        : "Camera/Mic permission granted. Join the meeting and the devices will turn on.";
+      syncJitsiDevicesAfterJoin();
     } catch (_) {
       deviceStatus.textContent = "Camera/Mic blocked. Allow permissions in browser settings.";
+      devicesRequested = false;
     }
   }
   enableDevicesBtn.addEventListener("click", enableDevices);
