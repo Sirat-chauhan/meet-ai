@@ -15,6 +15,8 @@ AI-powered meeting platform built with Python (FastAPI) and Jitsi, with optional
   - user answers by mic
   - primary mode uses browser speech recognition
   - fallback mode records mic chunks and transcribes on server (`/transcripts/transcribe`)
+  - continuous listening with pause-based turn detection
+  - interruption support so the assistant can stop speaking when the user starts speaking again
   - AI responds by voice
 - Live transcript auto-save during interview
 - Post-meeting summary generation with in-app background tasks
@@ -48,8 +50,8 @@ Important keys:
 - `OPENAI_TRANSCRIPTION_MODEL` (optional): audio transcription model (default `whisper-1`)
 - `DATABASE_URL`: default local is SQLite (`sqlite:///./ai_meeting_v2.db`)
 - `AUTO_CREATE_TABLES=true`: easiest local mode
-- `FRONTEND_ORIGIN=http://localhost:5173`
-- `APP_BASE_URL`: must match the backend URL used in local/dev/prod so Supabase verification redirects back correctly
+- `FRONTEND_ORIGIN=http://localhost:5173`: frontend/main-site URL used after email confirmation
+- `APP_BASE_URL`: backend/base app URL used for local/dev/prod routing and fallback redirects
 - `SUPABASE_URL` + `SUPABASE_ANON_KEY`: enable Supabase Auth for signup/login/email verification
 - `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`: enable Google OAuth login
 - `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET`: enable GitHub OAuth login
@@ -59,11 +61,12 @@ Recommended:
 - Set `SUPABASE_URL`
 - Set `SUPABASE_ANON_KEY`
 - In Supabase Auth settings, set `Site URL` to your app URL
-- Add `/login` on your app URL to Supabase redirect URLs
+- Add your app URL to Supabase redirect URLs
 
 When Supabase Auth is configured:
 - sign up and login use Supabase Auth
 - verification emails are sent by Supabase
+- after email confirmation, users are redirected to `FRONTEND_ORIGIN` first, or `APP_BASE_URL` if `FRONTEND_ORIGIN` is empty
 - the app still syncs a local `users` row for meetings, agents, billing, and ownership
 
 When Supabase Auth is not configured:
@@ -86,8 +89,10 @@ When set, these features run on OpenAI:
 Note: If you use a third-party OpenAI-compatible provider, chat/summaries usually work. Embeddings and audio transcription depend on the provider.
 
 ### Mic + transcription notes
-- If `OPENAI_API_KEY` is set, the meeting page uses **server transcription** via MediaRecorder → `/meetings/{id}/transcripts/transcribe` (Whisper). For best results, use Chrome/Edge and allow microphone permissions.
-- If `OPENAI_API_KEY` is not set, voice input depends on the browser Web Speech API (SpeechRecognition). Some browsers (often Firefox) do not support it.
+- The meeting page now prefers **browser speech recognition first** when supported.
+- If browser speech recognition is unavailable or fails, the app falls back to **server transcription** via MediaRecorder → `/meetings/{id}/transcripts/transcribe` when `OPENAI_API_KEY` is set.
+- For best results, use Chrome or Edge and allow microphone permissions.
+- The meeting page keeps listening continuously, waits for a pause before sending your utterance, and can interrupt AI speech when you start speaking again.
 - If you use an OpenAI-compatible provider, audio transcription may be unsupported even if chat works.
 
 ### Optional fallback mode
@@ -113,6 +118,7 @@ Important: set `APP_BASE_URL=http://localhost:8001` in `.env` when running on po
 
 Email verification redirect:
 - After verification, users are redirected to `FRONTEND_ORIGIN` (or `APP_BASE_URL`) with `/?verified=1`.
+- If you are not running a separate frontend locally, set `FRONTEND_ORIGIN=http://localhost:8001` so verification returns to the same site.
 
 ## Optional React frontend
 ```bash
@@ -164,7 +170,7 @@ This repo is configured for a free single-service deployment (no managed Redis/P
 
 Supabase setup for Render:
 1. In Supabase Auth settings, set `Site URL` to your Render app URL.
-2. Add `https://your-app.onrender.com/login` to redirect URLs.
+2. Add `https://your-app.onrender.com` to redirect URLs.
 3. No SMTP, Redis, or Celery setup is required for the current default deployment path.
 
 ### Start command used
@@ -177,14 +183,16 @@ You can reuse this from [`Procfile`](./Procfile) on other PaaS platforms as well
 2. Create agent with an `interview_script`
 3. Start meeting from dashboard
 4. Click `Start Interview`
-5. Click `Start Mic` and speak
-6. Watch mic state text (`Listening...` or fallback transcription mode)
-7. AI asks/replies by voice
-8. Use top toolbar search in meeting page to filter transcript lines
-9. Use sidebar `Logout` to sign out
-10. Check transcript list (auto-saves both sides)
-11. Click `Refresh Now` under Rolling Summary
-12. Ask a question in `Ask Meeting Memory`
+5. Click `Enable Camera & Mic`
+6. Click `Start Mic` and speak
+7. Watch mic state text (`Listening...`, `Listening: ...`, or `Processing...`)
+8. Pause briefly and wait for the AI reply
+9. AI asks/replies by voice
+10. Use top toolbar search in meeting page to filter transcript lines
+11. Use sidebar `Logout` to sign out
+12. Check transcript list (auto-saves both sides)
+13. Click `Refresh` under Rolling Summary
+14. Ask a question in `Ask Meeting Memory`
 
 ## Inviting guests
 Each meeting page has `Copy Invite Link`, which shares a `/join/{invite_token}` URL.
