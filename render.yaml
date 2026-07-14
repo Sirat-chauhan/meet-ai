@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: meetai-web
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: bash -lc 'bash scripts/render_start.sh'
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: AUTO_CREATE_TABLES
+        value: "false"
+      - key: DATABASE_URL
+        value: sqlite:///./ai_meeting_v2.db
+      - key: JITSI_DOMAIN
+        value: meet.jit.si
+      - key: APP_BASE_URL
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
