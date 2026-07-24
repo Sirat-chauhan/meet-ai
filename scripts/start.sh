@@ -15,7 +15,6 @@ run_migrations() {
 
   printf "%s\n" "$out" >&2
 
-  # Render Free has no shell access, so we can’t run one-off `alembic stamp head` manually.
   # If the DB was previously bootstrapped without Alembic (e.g. AUTO_CREATE_TABLES),
   # the initial migration can fail with DuplicateTable. In that case, stamp and continue.
   if printf "%s\n" "$out" | grep -qiE "duplicatetable|relation \"users\" already exists|psycopg2\.errors\.duplicatetable"; then

@@ -10,5 +10,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Render “Docker” services expect the app to listen on $PORT.
-CMD ["bash", "-lc", "bash scripts/render_start.sh"]
+# Docker services usually expect the app to listen on $PORT.
+CMD ["bash", "-lc", "bash scripts/start.sh"]

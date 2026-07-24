@@ -1,1 +1,1 @@
-web: bash -lc 'bash scripts/render_start.sh'
+web: bash -lc 'bash scripts/start.sh'

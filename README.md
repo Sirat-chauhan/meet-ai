@@ -114,7 +114,7 @@ Set in `.env`:
 - `RAZORPAY_KEY_ID=rzp_...`
 - `RAZORPAY_KEY_SECRET=...`
 - `RAZORPAY_WEBHOOK_SECRET=...`
-- **Important**: Your Razorpay Webhook URL in the Razorpay dashboard **must** be set to `https://your-app.onrender.com/billing/webhook`.
+- **Important**: Your Razorpay Webhook URL in the Razorpay dashboard **must** be set to `https://your-app-domain.com/billing/webhook`.
 
 ## Local run (recommended first)
 ```bash
@@ -158,24 +158,19 @@ Fix options:
 - **Reset DB (simplest):** delete the DB / create a fresh database, then redeploy.
 - **Keep existing DB:** run `PYTHONPATH=. alembic stamp head` once (creates/updates `alembic_version` without running `CREATE TABLE`), then redeploy.
 
-Render Free note:
-- Render Free does not support web shell access. The default start command uses `scripts/render_start.sh`, which auto-stamps `head` for the common `DuplicateTable` case and continues boot.
+## Deployment (single service)
+This repo is configured for a free single-service deployment (no managed Redis/Postgres/worker required).
 
-## Free deploy mode (single service)
-This repo is configured for a free single-service deployment (no managed Redis/Postgres/worker required) using [`render.yaml`](./render.yaml).
-
-### Render deploy options
-- **Recommended (Blueprint / Python service):** use [`render.yaml`](./render.yaml). No Docker setup is required.
-- **Docker service:** Render will build using `Dockerfile`. If you created a Docker service earlier, keep `Dockerfile` in the repo or switch the service to the Blueprint/Python flow.
+### Deploy options
+- **Docker service:** Use `Dockerfile`.
+- **Python service:** Ensure you run `scripts/start.sh` or the start command below.
 
 ### Quick steps
 1. Push this repo to GitHub.
-2. In Render, create a new **Blueprint** and select this repo.
-3. Render will create:
-   - `meetai-web` (FastAPI web service)
-4. Set required env vars in Render dashboard:
-   - `APP_BASE_URL` = your Render web URL
-   - `FRONTEND_ORIGIN` = same Render web URL
+2. Setup your hosting provider to build and run the app.
+3. Set required env vars:
+   - `APP_BASE_URL` = your web URL
+   - `FRONTEND_ORIGIN` = same web URL
    - `SUPABASE_URL` = your Supabase project URL
    - `SUPABASE_ANON_KEY` = your Supabase anon key
     - `OPENAI_API_KEY`
@@ -183,16 +178,12 @@ This repo is configured for a free single-service deployment (no managed Redis/P
     - `RAZORPAY_KEY_SECRET`
     - `RAZORPAY_WEBHOOK_SECRET`
     - Optional: OAuth keys (Google/GitHub)
-5. Deploy.
 
-Supabase setup for Render:
-1. In Supabase Auth settings, set `Site URL` to your Render app URL.
-2. Add both `https://your-app.onrender.com` AND `https://your-app.onrender.com/reset-password` to **Redirect URLs**.
+Supabase setup:
+1. In Supabase Auth settings, set `Site URL` to your app URL.
+2. Add both `https://your-app-domain.com` AND `https://your-app-domain.com/reset-password` to **Redirect URLs**.
 3. **Database Configuration**:
-   - Use the **Supabase Connection Pooler** (Port `6543`) for Render deployments.
-   - Set `DATABASE_URL` in Render to: `postgresql://postgres.YOUR_PROJECT_ID:YOUR_PASSWORD@aws-0-YOUR_REGION.pooler.supabase.com:6543/postgres?sslmode=require`
-   - **Important**: If your password contains special characters like `@`, you must URL-encode them (e.g., `@` becomes `%40`).
-   - **Important**: Do not use double quotes `"` around environment variable values in the Render dashboard.
+   - Set `DATABASE_URL` to your PostgreSQL database URL.
 4. No SMTP, Redis, or Celery setup is required for the current default deployment path.
 
 ### Start command used
@@ -222,7 +213,7 @@ Each meeting page has `Copy Invite Link`, which shares a `/join/{invite_token}` 
 
 Notes:
 - On local dev (`127.0.0.1`), invite links only work for someone who can reach your machine.
-- On Render (HTTPS), the invite link is public and can be opened by anyone with the URL.
+- On production (HTTPS), the invite link is public and can be opened by anyone with the URL.
 
 ## Verify OpenAI is active
 1. Set `OPENAI_API_KEY` in `.env`
