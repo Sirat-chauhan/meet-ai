@@ -222,7 +222,10 @@ def signup(
 
 
 @router.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
+def login_page(request: Request, db: Session = Depends(get_db)):
+    user = _current_user_from_cookie(request, db)
+    if user:
+        return RedirectResponse("/dashboard", status_code=302)
     return templates.TemplateResponse(
         "login.html",
         {
@@ -363,8 +366,10 @@ def login(
 @router.get("/logout")
 def logout():
     response = RedirectResponse("/login", status_code=302)
-    response.delete_cookie("user_id")
-    response.delete_cookie("access_token")
+    response.delete_cookie("user_id", path="/")
+    response.delete_cookie("access_token", path="/")
+    response.set_cookie("user_id", "", max_age=0, expires=0, path="/")
+    response.set_cookie("access_token", "", max_age=0, expires=0, path="/")
     return response
 
 
@@ -470,13 +475,24 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         if meeting.ended_at and meeting.status != "completed":
             meeting.status = "completed"
             updated_status = True
-        duration = "0 minutes"
+        duration = "0 mins"
         if meeting.started_at and meeting.ended_at:
-            mins = max(int((meeting.ended_at - meeting.started_at).total_seconds() // 60), 1)
-            duration = f"{mins} minutes"
+            secs = max((meeting.ended_at - meeting.started_at).total_seconds(), 0)
+            mins = int(secs // 60)
+            if mins < 60:
+                duration = f"{mins} mins"
+            else:
+                hours = mins // 60
+                duration = f"{hours}h {mins % 60}m"
         elif meeting.started_at:
-            mins = max(int((datetime.utcnow() - meeting.started_at).total_seconds() // 60), 1)
-            duration = f"{mins} minutes"
+            secs = max((datetime.utcnow() - meeting.started_at).total_seconds(), 0)
+            mins = int(secs // 60)
+            if mins < 60:
+                duration = f"{mins} mins"
+            elif mins < 1440:
+                duration = f"{mins // 60}h {mins % 60}m"
+            else:
+                duration = f"{mins // 1440}d {(mins % 1440) // 60}h"
         meeting_rows.append(
             {
                 "id": meeting.id,
@@ -768,6 +784,20 @@ def meeting_page(meeting_id: int, request: Request, db: Session = Depends(get_db
             "server_transcription_enabled": bool(ai_service.client),
         },
     )
+
+@router.delete("/meeting/{meeting_id}")
+def delete_meeting(meeting_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _current_user_from_cookie(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id, Meeting.user_id == user.id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+        
+    db.delete(meeting)
+    db.commit()
+    return {"message": "Meeting deleted"}
 
 
 @router.get("/join/{invite_token}", response_class=HTMLResponse, name="guest_meeting_page")

@@ -249,7 +249,7 @@ button:hover,
 .table-head,
 .meeting-row {
   display: grid;
-  grid-template-columns: 1.8fr 0.9fr 0.8fr 0.7fr;
+  grid-template-columns: 1.5fr 0.8fr 1.1fr 2fr;
   gap: 10px;
   align-items: center;
 }
@@ -259,6 +259,7 @@ button:hover,
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin: 4px 0 6px;
+  padding: 0 12px;
 }
 .meeting-table {
   border: 1px solid #e6e8ed;

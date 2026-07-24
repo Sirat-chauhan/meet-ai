@@ -11,16 +11,62 @@ Meet AI is an intelligent, AI-powered meeting platform designed to elevate remot
 - **Robust Authentication:** Secure email/password verification, OAuth support, and user management powered by Supabase.
 - **Integrated Billing:** Subscription and payment scaffolding built directly into the platform using Razorpay.
 
-## 🚀 Benefits
+## 🚀 Quick Start / Local Setup
 
-- **Enhanced Productivity:** Eliminate the need for manual note-taking. Let AI summarize action items and key decisions automatically.
-- **Better Interview Workflows:** Conduct automated, structured AI-driven interviews with customizable agent personalities and scripts.
-- **Seamless Infrastructure:** Uses Jitsi for high-quality, frictionless video conferencing without the overhead of heavy third-party desktop apps.
-- **Actionable Insights:** Easily query past meetings using natural language to find exactly what was said, reducing knowledge loss.
+Follow these steps to get the project running locally.
+
+### Prerequisites
+- Python 3.10+
+- Node.js 18+
+- PostgreSQL (or SQLite for local dev)
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/your-username/meet-ai.git
+cd meet-ai
+```
+
+### 2. Backend Setup
+Set up your Python virtual environment and install dependencies:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+pip install -r requirements.txt
+```
+
+**Environment Variables:**
+Copy `.env.example` to `.env` and fill in your keys (Supabase, OpenAI, Razorpay):
+```bash
+cp .env.example .env
+```
+*(Note: If `OPENAI_API_KEY` is not provided, the app will run in a local fallback mode.)*
+
+**Database Migrations & Start Server:**
+Run Alembic migrations to set up your database, then start the FastAPI server:
+```bash
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
+```
+The backend API will be available at `http://localhost:8000`.
+
+### 3. Frontend Setup
+In a new terminal window, navigate to the frontend directory and start the Vite development server:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+The application will be available at `http://localhost:5173`.
 
 ## 🛠️ Tech Stack
 - **Backend:** FastAPI, SQLAlchemy, Python
-- **Frontend:** React (Vite)
+- **Frontend:** React (Vite), React Router
 - **Video Conferencing:** Jitsi (`meet.jit.si`)
 - **AI & Agentic Workflows:** LangGraph, LangChain, LangSmith, OpenAI
 - **Database & Auth:** PostgreSQL, Supabase Auth
+
+## 🤝 Contributing
+Contributions, issues, and feature requests are welcome! Feel free to check the issues page.
+
+## 📄 License
+This project is licensed under the terms of the LICENSE file included in this repository.

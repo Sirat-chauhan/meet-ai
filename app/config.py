@@ -14,6 +14,11 @@ class Settings:
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "120"))
 
+    def __post_init__(self):
+        if self.app_env == "production" and self.secret_key == "change-me-in-production":
+            raise ValueError("SECRET_KEY must be configured in production environment!")
+
+
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./ai_meeting.db")
     supabase_url: str = os.getenv("SUPABASE_URL", "")
     supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
