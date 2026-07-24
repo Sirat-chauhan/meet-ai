@@ -1,26 +1,253 @@
 # Meet AI
 
-Meet AI is an intelligent, AI-powered meeting platform designed to elevate remote communication and interviews. Built with Python (FastAPI), React, and Jitsi, it integrates advanced language models to provide real-time voice interaction, automatic transcriptions, semantic search, and AI-driven meeting summaries.
+AI-powered meeting platform built with Python (FastAPI) and Jitsi, with optional OpenAI intelligence, Supabase-backed email verification auth, transcripts, summaries, semantic search, and Razorpay billing scaffolding.
 
-## ✨ Features
+## What is implemented
+- FastAPI backend with modular routers
+- Supabase Auth-backed email/password verification with local user sync
+- JWT/web cookie fallback auth when Supabase Auth is not configured
+- Sidebar logout (`/logout`) that clears auth cookies
+- Agent creation (behavior, personality, interview script)
+- Meeting creation and Jitsi room embedding
+- AI interviewer presence in meeting page
+- Voice interview mode:
+  - AI asks question by voice
+  - user answers by mic
+  - primary mode uses browser speech recognition
+  - fallback mode records mic chunks and transcribes on server (`/transcripts/transcribe`)
+  - continuous listening with pause-based turn detection
+  - interruption support so the assistant can stop speaking when the user starts speaking again
+  - AI responds by voice
+- Live transcript auto-save during interview
+- Post-meeting summary generation with in-app background tasks
+- Rolling in-meeting summary refresh (`/meetings/{id}/summary/refresh`)
+- Embedding-based transcript search
+- Live meeting Q&A from transcript memory (`/meetings/{id}/qa`)
+- In-meeting transcript filter/search bar (toolbar search)
+- Memory page shows transcript-line counts per meeting and warns when selected meeting has no transcript data
+- Memory Q&A fallback can answer from recent transcript text when embedding rows are unavailable
+- Razorpay webhook scaffolding and plan model
+- **LangGraph-Powered Agents**: Interview flow is managed by a stateful graph for better follow-ups and script tracking.
+- **LangSmith Tracing**: Built-in observability for all AI interactions (Chat, Summaries, RAG).
+- React frontend scaffold (`frontend/`) for API-driven flow
 
-- **AI Interviewer & Voice Mode:** Engage in natural, continuous voice conversations with an AI assistant that can ask questions, listen, and dynamically respond in real-time.
-- **Real-Time Transcription:** Automatically captures and saves live meeting transcripts during the call, with both browser and server-side fallback support.
-- **Smart Meeting Summaries:** Generates comprehensive post-meeting summaries automatically using OpenAI.
-- **Semantic Memory & Search:** Ask questions about past meetings and instantly retrieve context through embedding-based semantic search.
-- **Robust Authentication:** Secure email/password verification, OAuth support, and user management powered by Supabase.
-- **Integrated Billing:** Subscription and payment scaffolding built directly into the platform using Razorpay.
+## Tech stack
+- Backend: FastAPI, SQLAlchemy, Jinja templates
+- Frontend: React (Vite) + meeting web page template
+- DB: SQLite (default local) or PostgreSQL
+- Video: Jitsi (`meet.jit.si`)
+- AI & Agents: 
+  - **LangChain** & **LangGraph** (agentic workflows)
+  - **LangSmith** (observability and tracing)
+  - OpenAI SDK (chat/embeddings/audio) with support for OpenAI-compatible providers
 
-## 🚀 Benefits
+## Environment setup
+Copy env and edit values:
+```bash
+cp .env.example .env
+```
 
-- **Enhanced Productivity:** Eliminate the need for manual note-taking. Let AI summarize action items and key decisions automatically.
-- **Better Interview Workflows:** Conduct automated, structured AI-driven interviews with customizable agent personalities and scripts.
-- **Seamless Infrastructure:** Uses Jitsi for high-quality, frictionless video conferencing without the overhead of heavy third-party desktop apps.
-- **Actionable Insights:** Easily query past meetings using natural language to find exactly what was said, reducing knowledge loss.
+Important keys:
+- `OPENAI_API_KEY`: set this to use OpenAI for live interview intelligence
+- `OPENAI_BASE_URL` (optional): point the OpenAI SDK at an OpenAI-compatible provider (OpenRouter, Groq, Together, local, etc.)
+- `OPENAI_DEFAULT_HEADERS_JSON` (optional): JSON object string of headers forwarded to the OpenAI SDK (useful for OpenRouter attribution)
+- `OPENAI_CHAT_MAX_TOKENS` (optional): caps chat reply length (default `260`)
+- `OPENAI_TRANSCRIPTION_MODEL` (optional): audio transcription model (default `whisper-1`)
+- `DATABASE_URL`: default local is SQLite (`sqlite:///./ai_meeting_v2.db`)
+- `AUTO_CREATE_TABLES=true`: easiest local mode
+- `FRONTEND_ORIGIN=http://localhost:5173`: frontend/main-site URL used after email confirmation
+- `APP_BASE_URL`: backend/base app URL used for local/dev/prod routing and fallback redirects
+- `SUPABASE_URL` + `SUPABASE_ANON_KEY`: enable Supabase Auth for signup/login/email verification
+- `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`: enable Google OAuth login
+- `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET`: enable GitHub OAuth login
+- `LANGCHAIN_TRACING_V2`: set to `true` to enable LangSmith tracing
+- `LANGCHAIN_API_KEY`: your LangSmith API key
+- `LANGCHAIN_PROJECT`: LangSmith project name (default `meet-ai`)
+- `PASSWORD_RESET_EXPIRE_MINUTES` (optional): local-auth password reset link lifetime, default `60`
 
-## 🛠️ Tech Stack
-- **Backend:** FastAPI, SQLAlchemy, Python
-- **Frontend:** React (Vite)
-- **Video Conferencing:** Jitsi (`meet.jit.si`)
-- **AI & Agentic Workflows:** LangGraph, LangChain, LangSmith, OpenAI
-- **Database & Auth:** PostgreSQL, Supabase Auth
+### Auth mode
+Recommended:
+- Set `SUPABASE_URL`
+- Set `SUPABASE_ANON_KEY`
+- In Supabase Auth settings, set `Site URL` to your app URL
+- Add your app URL to Supabase redirect URLs
+
+When Supabase Auth is configured:
+- sign up and login use Supabase Auth
+- verification emails are sent by Supabase
+- password reset emails are sent by Supabase and redirect back to `/reset-password`
+- after email confirmation, users are redirected to `FRONTEND_ORIGIN` first, or `APP_BASE_URL` if `FRONTEND_ORIGIN` is empty
+- the app still syncs a local `users` row for meetings, agents, billing, and ownership
+
+When Supabase Auth is not configured:
+- the app falls back to the older local auth flow
+- forgot/reset password works through the app's own SMTP-based email flow
+- email verification is not handled by Supabase, so production signup verification is not recommended in that mode
+
+### OpenAI Mode (recommended)
+Set in `.env`:
+- `OPENAI_API_KEY=sk-...`
+- Optional (OpenAI-compatible providers):
+  - `OPENAI_BASE_URL=https://openrouter.ai/api/v1`
+  - `OPENAI_DEFAULT_HEADERS_JSON={"HTTP-Referer":"http://localhost:8001","X-Title":"Meet AI"}`
+
+When set, these features run on OpenAI:
+- interview Q&A responses
+- summaries
+- embeddings-based search
+- whisper transcription endpoint (`/meetings/{id}/transcripts/transcribe`)
+
+Note: If you use a third-party OpenAI-compatible provider, chat/summaries usually work. Embeddings and audio transcription depend on the provider.
+
+### Mic + transcription notes
+- The meeting page now prefers **browser speech recognition first** when supported.
+- If browser speech recognition is unavailable or fails, the app falls back to **server transcription** via MediaRecorder → `/meetings/{id}/transcripts/transcribe` when `OPENAI_API_KEY` is set.
+- For best results, use Chrome or Edge and allow microphone permissions.
+- The meeting page keeps listening continuously, waits for a pause before sending your utterance, and can interrupt AI speech when you start speaking again.
+- If you use an OpenAI-compatible provider, audio transcription may be unsupported even if chat works.
+
+### Optional fallback mode
+If `OPENAI_API_KEY` is empty, the app still runs with local fallback logic for interview/summaries/search.
+
+### Razorpay Billing (Mandatory for subscription flow)
+Set in `.env`:
+- `RAZORPAY_KEY_ID=rzp_...`
+- `RAZORPAY_KEY_SECRET=...`
+- `RAZORPAY_WEBHOOK_SECRET=...`
+- **Important**: Your Razorpay Webhook URL in the Razorpay dashboard **must** be set to `https://your-app-domain.com/billing/webhook`.
+
+## Local run (recommended first)
+```bash
+source venv/bin/activate
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
+```
+
+Open:
+- `http://localhost:8001/health`
+- `http://localhost:8001/login`
+
+Important: set `APP_BASE_URL=http://localhost:8001` in `.env` when running on port `8001`, and add `http://localhost:8001/login` to Supabase Auth redirect URLs if you are testing email verification locally.
+
+Email verification redirect:
+- After verification, users are redirected to `FRONTEND_ORIGIN` (or `APP_BASE_URL`) with `/?verified=1`.
+- If you are not running a separate frontend locally, set `FRONTEND_ORIGIN=http://localhost:8001` so verification returns to the same site.
+
+## Optional React frontend
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Open: `http://localhost:5173`
+
+## Optional migration flow (Alembic)
+```bash
+PYTHONPATH=. alembic upgrade head
+```
+
+Email verification fields were added in migration `20260309_01`, so run migrations if you already have an existing local DB. The local `users` table is still used even with Supabase Auth, because the app stores ownership and plan data there.
+Password reset fields were added in migration `20260423_01`.
+
+### Troubleshooting migrations
+If you previously started the app with `AUTO_CREATE_TABLES=true` on the same database and later enabled Alembic migrations, you may see errors like `DuplicateTable: relation "users" already exists`.
+
+Fix options:
+- **Reset DB (simplest):** delete the DB / create a fresh database, then redeploy.
+- **Keep existing DB:** run `PYTHONPATH=. alembic stamp head` once (creates/updates `alembic_version` without running `CREATE TABLE`), then redeploy.
+
+## Deployment (single service)
+This repo is configured for a free single-service deployment (no managed Redis/Postgres/worker required).
+
+### Deploy options
+- **Docker service:** Use `Dockerfile`.
+- **Python service:** Ensure you run `scripts/start.sh` or the start command below.
+
+### Quick steps
+1. Push this repo to GitHub.
+2. Setup your hosting provider to build and run the app.
+3. Set required env vars:
+   - `APP_BASE_URL` = your web URL
+   - `FRONTEND_ORIGIN` = same web URL
+   - `SUPABASE_URL` = your Supabase project URL
+   - `SUPABASE_ANON_KEY` = your Supabase anon key
+    - `OPENAI_API_KEY`
+    - `RAZORPAY_KEY_ID`
+    - `RAZORPAY_KEY_SECRET`
+    - `RAZORPAY_WEBHOOK_SECRET`
+    - Optional: OAuth keys (Google/GitHub)
+
+Supabase setup:
+1. In Supabase Auth settings, set `Site URL` to your app URL.
+2. Add both `https://your-app-domain.com` AND `https://your-app-domain.com/reset-password` to **Redirect URLs**.
+3. **Database Configuration**:
+   - Set `DATABASE_URL` to your PostgreSQL database URL.
+4. No SMTP, Redis, or Celery setup is required for the current default deployment path.
+
+### Start command used
+- Web: `PYTHONPATH=. gunicorn -k uvicorn.workers.UvicornWorker -w 2 -b 0.0.0.0:$PORT app.main:app`
+
+You can reuse this from [`Procfile`](./Procfile) on other PaaS platforms as well.
+
+## How to test interview quickly
+1. Sign up and login at `/login`
+2. Use `Forgot password?` on `/login` if you want to test the recovery flow
+3. Create agent with an `interview_script`
+4. Start meeting from dashboard
+5. Click `Start Interview`
+6. Click `Enable Camera & Mic`
+7. Click `Start Mic` and speak
+8. Watch mic state text (`Listening...`, `Listening: ...`, or `Processing...`)
+9. Pause briefly and wait for the AI reply
+10. AI asks/replies by voice
+11. Use top toolbar search in meeting page to filter transcript lines
+12. Use sidebar `Logout` to sign out
+13. Check transcript list (auto-saves both sides)
+14. Click `Refresh` under Rolling Summary
+15. Ask a question in `Ask Meeting Memory`
+
+## Inviting guests
+Each meeting page has `Copy Invite Link`, which shares a `/join/{invite_token}` URL.
+
+Notes:
+- On local dev (`127.0.0.1`), invite links only work for someone who can reach your machine.
+- On production (HTTPS), the invite link is public and can be opened by anyone with the URL.
+
+## Verify OpenAI is active
+1. Set `OPENAI_API_KEY` in `.env`
+2. Restart backend
+3. Start interview and ask a follow-up
+4. If responses feel dynamic/contextual, OpenAI mode is active
+
+## Performance notes
+- Chat over WebSocket sends only the most recent context (last ~16 messages) to keep responses fast.
+- Transcript embeddings are computed in a background task so saving a transcript line stays fast.
+
+## Current limitation
+- The AI icon/tile in Jitsi is simulated via in-page/hidden client behavior.
+- A fully independent media-stream bot participant in Jitsi requires self-hosted Jitsi bot infrastructure.
+- Free single-service mode uses SQLite filesystem storage; data persistence may reset depending on host platform policy.
+
+## Main API routes
+- `POST /auth/signup`
+- `POST /auth/login`
+- `POST /auth/forgot-password`
+- `POST /auth/reset-password`
+- `GET /auth/me`
+- `GET /logout`
+- `POST /agents`
+- `GET /agents`
+- `POST /meetings`
+- `POST /meetings/{meeting_id}/transcripts`
+- `POST /meetings/{meeting_id}/transcripts/transcribe`
+- `POST /meetings/{meeting_id}/search`
+- `POST /meetings/{meeting_id}/end`
+- `GET /meetings/{meeting_id}/summary`
+- `POST /meetings/{meeting_id}/summary/refresh`
+- `POST /meetings/{meeting_id}/qa`
+- `WS /ws/{meeting_id}` (meeting chat)
+- `POST /meetings/{meeting_id}/qa`
+- `POST /billing/webhook`
+- `POST /billing/razorpay/order`
