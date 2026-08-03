@@ -14,7 +14,7 @@ jobs:
         run: |
           # Replace the URL below with your actual Hugging Face Space URL
           # E.g., https://yourusername-yourspace.hf.space/health
-          URL="https://YOUR_USERNAME-YOUR_SPACE_NAME.hf.space/health"
+          URL="https://siratchauhan-meet-ai.hf.space/health"
           
           echo "Pinging $URL..."
           curl -f "$URL"
