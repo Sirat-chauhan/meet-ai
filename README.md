@@ -1,3 +1,12 @@
+---
+title: Meet Ai
+emoji: 🚀
+colorFrom: blue
+colorTo: pink
+sdk: gradio
+app_file: app.py
+pinned: false
+---
 # Meet AI
 
 Meet AI is an intelligent, AI-powered meeting platform designed to elevate remote communication and interviews. Built with Python (FastAPI), React, and Jitsi, it integrates advanced language models to provide real-time voice interaction, automatic transcriptions, semantic search, and AI-driven meeting summaries.
