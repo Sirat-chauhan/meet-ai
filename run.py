@@ -1,7 +1,12 @@
 import os
 import subprocess
 import uvicorn
+import spaces
 from app.main import app
+
+@spaces.GPU
+def dummy_gpu_function():
+    pass
 
 def run_migrations():
     print("Running database migrations...")
