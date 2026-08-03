@@ -1,15 +1,15 @@
 export const COLORS = {
-  bg: "#0a0f0a",
-  sidebar: "#0d1410",
-  card: "#111a14",
-  cardHover: "#162019",
-  green: "#22c55e",
-  greenDark: "#16a34a",
-  greenGlow: "#22c55e33",
-  text: "#e8f5e9",
-  muted: "#6b7f6e",
-  border: "#1e2e22",
-  accent: "#4ade80",
+  bg: "#f8fafc",
+  sidebar: "#ffffff",
+  card: "#ffffff",
+  cardHover: "#f1f5f9",
+  green: "#16a34a",
+  greenDark: "#15803d",
+  greenGlow: "#16a34a1a",
+  text: "#0f172a",
+  muted: "#64748b",
+  border: "#e2e8f0",
+  accent: "#22c55e",
 };
 
 export const MOCK_MEETINGS = [

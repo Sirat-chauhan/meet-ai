@@ -3,13 +3,13 @@ import { COLORS } from "../../utils/constants";
 
 export const Modal = ({ title, subtitle, children, onClose }) => (
   <div style={{
-    position: "fixed", inset: 0, background: "#00000088", backdropFilter: "blur(8px)",
+    position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.4)", backdropFilter: "blur(6px)",
     display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
     animation: "fadeIn 0.15s ease"
   }}>
     <div style={{
-      background: "#0f1a12", border: `1px solid ${COLORS.border}`, borderRadius: 16,
-      padding: "32px", width: "100%", maxWidth: 480, boxShadow: "0 24px 80px #000a",
+      background: "#ffffff", border: `1px solid ${COLORS.border}`, borderRadius: 16,
+      padding: "32px", width: "100%", maxWidth: 480, boxShadow: "0 24px 60px rgba(0, 0, 0, 0.15)",
       animation: "slideUp 0.2s ease"
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
