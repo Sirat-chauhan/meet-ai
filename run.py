@@ -21,7 +21,6 @@ def run_migrations():
     except Exception as e:
         print(f"Error running migrations: {e}")
 
-# Run migrations on startup
 run_migrations()
 
 @spaces.GPU
@@ -29,17 +28,15 @@ def health_check(text):
     """GPU-decorated function to satisfy ZeroGPU requirements."""
     return f"✅ Meet AI Backend is healthy! Echo: {text}"
 
-# Create a minimal Gradio interface (required by ZeroGPU)
-with gr.Blocks(title="Meet AI API") as gradio_interface:
+# ZeroGPU specifically scans the 'demo' variable for @spaces.GPU functions
+with gr.Blocks(title="Meet AI API") as demo:
     gr.Markdown("# 🤖 Meet AI - Backend API Server")
     with gr.Row():
         inp = gr.Textbox(label="Health Check", placeholder="Type anything to test...")
         out = gr.Textbox(label="Response")
-    inp.submit(health_check, inp, out)
     btn = gr.Button("Check Health")
     btn.click(health_check, inp, out)
 
-# Mount Gradio onto our FastAPI app at a sub-path.
-# This preserves ALL FastAPI routes (login, signup, dashboard, etc.)
-# We re-assign to 'app' so Hugging Face's server picks up the full FastAPI app.
-app = gr.mount_gradio_app(fastapi_app, gradio_interface, path="/_gradio")
+# Mount Gradio onto FastAPI under /_gradio.
+# Expose 'app' so Hugging Face serves the FastAPI app at root /
+app = gr.mount_gradio_app(fastapi_app, demo, path="/_gradio")

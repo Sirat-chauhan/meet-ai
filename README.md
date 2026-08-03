@@ -3,8 +3,8 @@ title: Meet Ai
 emoji: 🚀
 colorFrom: blue
 colorTo: pink
-sdk: docker
-app_port: 7860
+sdk: gradio
+app_file: run.py
 pinned: false
 ---
 # Meet AI
