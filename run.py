@@ -48,9 +48,33 @@ from app.main import app as fastapi_app
 for route in fastapi_app.routes:
     demo.app.routes.insert(0, route)
 
-# Copy middleware from our FastAPI app to Gradio's app
-for middleware in reversed(fastapi_app.user_middleware):
-    demo.app.add_middleware(middleware.cls, **middleware.options)
+# Add middleware directly (can't copy from FastAPI app reliably)
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.cors import CORSMiddleware
+from app.config import settings
+
+demo.app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    same_site="lax",
+    https_only=False,
+)
+
+allowed_origins = sorted({
+    settings.frontend_origin,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+})
+
+demo.app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # HF's Gradio runtime auto-detects `demo` and launches it on port 7860.
 # Do NOT call demo.launch() or uvicorn.run() — that would cause a port conflict.
