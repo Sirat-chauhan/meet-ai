@@ -30,7 +30,7 @@ def health_check(text):
     return f"✅ Meet AI Backend is healthy! Echo: {text}"
 
 # Create a minimal Gradio interface (required by ZeroGPU)
-with gr.Blocks(title="Meet AI API") as demo:
+with gr.Blocks(title="Meet AI API") as gradio_interface:
     gr.Markdown("# 🤖 Meet AI - Backend API Server")
     with gr.Row():
         inp = gr.Textbox(label="Health Check", placeholder="Type anything to test...")
@@ -41,12 +41,5 @@ with gr.Blocks(title="Meet AI API") as demo:
 
 # Mount Gradio onto our FastAPI app at a sub-path.
 # This preserves ALL FastAPI routes (login, signup, dashboard, etc.)
-# and makes Gradio available at /_gradio
-combined_app = gr.mount_gradio_app(fastapi_app, demo, path="/_gradio")
-
-# Replace Gradio's internal app with the combined one so demo.launch()
-# starts our full FastAPI + Gradio app on the correct port.
-demo.app = combined_app
-
-# Launch the combined app
-demo.launch(server_name="0.0.0.0", server_port=7860)
+# We re-assign to 'app' so Hugging Face's server picks up the full FastAPI app.
+app = gr.mount_gradio_app(fastapi_app, gradio_interface, path="/_gradio")
