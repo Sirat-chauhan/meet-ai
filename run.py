@@ -76,5 +76,6 @@ demo.app.add_middleware(
     allow_headers=["*"],
 )
 
-# HF's Gradio runtime auto-detects `demo` and launches it on port 7860.
-# Do NOT call demo.launch() or uvicorn.run() — that would cause a port conflict.
+# Launch the Gradio app (which now includes our FastAPI routes in demo.app)
+# This is the ONLY server starting on port 7860 — no conflict.
+demo.launch(server_name="0.0.0.0", server_port=7860)
