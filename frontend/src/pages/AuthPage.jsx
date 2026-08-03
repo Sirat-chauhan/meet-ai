@@ -97,32 +97,7 @@ export function AuthPage({ onLogin }) {
                 {loading ? "Signing in..." : "Sign in"}
               </button>
 
-              <p style={{ margin: "18px 0 6px", textAlign: "center", color: "#a5abb7", fontSize: 13 }}>Or continue with</p>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <a
-                  href="https://siratchuahan-meet-ai.hf.space/auth/oauth/google/start"
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                    fontSize: 14, fontWeight: 600, borderRadius: 12, padding: "12px 16px",
-                    border: "1px solid #e2e5ea", background: "#fff", color: "#101828", textDecoration: "none"
-                  }}
-                >
-                  <span style={{ width: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><GoogleIcon /></span>
-                  <span>Continue with Google</span>
-                </a>
-                <a
-                  href="https://siratchuahan-meet-ai.hf.space/auth/oauth/github/start"
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                    fontSize: 14, fontWeight: 600, borderRadius: 12, padding: "12px 16px",
-                    border: "1px solid #e2e5ea", background: "#fff", color: "#101828", textDecoration: "none"
-                  }}
-                >
-                  <span style={{ width: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><GithubIcon /></span>
-                  <span>Continue with GitHub</span>
-                </a>
-              </div>
 
               <p style={{ margin: "22px 0 0", fontSize: 14, textAlign: "center", color: "#8a919f" }}>
                 Don't have an account?{" "}
