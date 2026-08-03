@@ -1,7 +1,4 @@
 import React, { useState } from "react";
-import { COLORS } from "../utils/constants";
-import { Input } from "../components/ui/Input";
-import { Button as Btn } from "../components/ui/Button";
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style={{ verticalAlign: "middle" }}>
@@ -36,141 +33,195 @@ export function AuthPage({ onLogin }) {
     setTimeout(() => {
       setLoading(false);
       if (onLogin) onLogin();
-    }, 600);
+    }, 500);
   };
 
   return (
     <div style={{
-      minHeight: "100vh", background: "#f4f4f0", display: "flex", alignItems: "center",
-      justifyContent: "center", padding: 20, fontFamily: "system-ui, -apple-system, sans-serif"
+      minHeight: "100vh", display: "grid", placeItems: "center", padding: 20,
+      background: "#f1f1ee", fontFamily: "system-ui, -apple-system, sans-serif"
     }}>
       <div style={{
-        display: "flex", borderRadius: 20, overflow: "hidden", width: "100%", maxWidth: 780,
-        boxShadow: "0 32px 80px rgba(0,0,0,0.12)", background: "#fff"
+        width: "min(840px, 100%)", display: "grid", gridTemplateColumns: "1.75fr 1fr",
+        borderRadius: 24, overflow: "hidden", border: "1px solid #e2e5ea", background: "#fff",
+        boxShadow: "0 22px 55px rgba(0, 0, 0, 0.18)"
       }}>
-        <div style={{ flex: 1, padding: "48px 40px" }}>
+        {/* Left Form Pane */}
+        <div style={{ padding: "48px 44px" }}>
           {mode === "login" ? (
-            <form onSubmit={handleSubmit}>
-              <h1 style={{ fontSize: 26, fontWeight: 800, color: "#111", margin: "0 0 6px" }}>Welcome back</h1>
-              <p style={{ color: "#666", fontSize: 14, margin: "0 0 28px" }}>Login to your account</p>
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <h1 style={{ margin: 0, fontSize: 44, fontWeight: 800, lineHeight: 1.05, color: "#101828" }}>Welcome back</h1>
+              <p style={{ margin: "8px 0 26px", color: "#8b90a0", fontSize: 19 }}>Login to your account</p>
 
               {error && (
-                <div style={{
-                  padding: "10px 14px", borderRadius: 8, background: "#fef2f2", color: "#b91c1c",
-                  fontSize: 13, marginBottom: 18, border: "1px solid #fecaca"
-                }}>
-                  {error}
-                </div>
+                <p style={{ margin: "0 0 14px", color: "#b42318", fontSize: 14 }}>{error}</p>
               )}
 
-              <Input label="Email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="m@example.com" type="email" />
-              
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>Password</label>
-                  <a href="#forgot" onClick={(e) => { e.preventDefault(); alert("Password reset link requested."); }} style={{ fontSize: 12, color: "#16a34a", fontWeight: 600, textDecoration: "none" }}>Forgot password?</a>
-                </div>
-                <Input value={form.password} onChange={(v) => setForm({ ...form, password: v })} placeholder="••••••••" type="password" />
-              </div>
+              <label style={{ fontSize: 14, color: "#61727b", fontWeight: 600 }}>Email</label>
+              <input
+                type="email"
+                placeholder="m@example.com"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required
+                style={{
+                  background: "#030c08", border: "1px solid #071910", borderRadius: 12,
+                  color: "#f4f8f5", fontSize: 17, padding: "14px 16px", outline: "none", width: "100%", boxSizing: "border-box"
+                }}
+              />
 
-              <Btn type="submit" disabled={loading} style={{ width: "100%", padding: "13px 20px", borderRadius: 8, fontSize: 15, fontWeight: 600, marginTop: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, marginBottom: 2 }}>
+                <label style={{ fontSize: 14, color: "#61727b", fontWeight: 600 }}>Password</label>
+                <a href="#forgot" onClick={(e) => { e.preventDefault(); alert("Password reset link requested."); }} style={{ fontSize: 12, color: "#21ac56", fontWeight: 600, textDecoration: "none" }}>Forgot password?</a>
+              </div>
+              <input
+                type="password"
+                placeholder="********"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+                style={{
+                  background: "#030c08", border: "1px solid #071910", borderRadius: 12,
+                  color: "#f4f8f5", fontSize: 17, padding: "14px 16px", outline: "none", width: "100%", boxSizing: "border-box"
+                }}
+              />
+
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  marginTop: 14, background: "#2fc564", color: "#03150b", borderRadius: 12,
+                  fontSize: 31, fontWeight: 700, padding: "13px 18px", border: "none", cursor: "pointer", width: "100%"
+                }}
+              >
                 {loading ? "Signing in..." : "Sign in"}
-              </Btn>
+              </button>
 
-              <div style={{ textAlign: "center", margin: "20px 0", color: "#888", fontSize: 13, display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ flex: 1, height: 1, background: "#e5e7eb" }}></span>
-                <span>Or continue with</span>
-                <span style={{ flex: 1, height: 1, background: "#e5e7eb" }}></span>
+              <p style={{ margin: "18px 0 6px", textAlign: "center", color: "#a5abb7", fontSize: 13 }}>Or continue with</p>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <a
+                  href="https://siratchuahan-meet-ai.hf.space/auth/oauth/google/start"
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                    fontSize: 14, fontWeight: 600, borderRadius: 12, padding: "12px 16px",
+                    border: "1px solid #e2e5ea", background: "#fff", color: "#101828", textDecoration: "none"
+                  }}
+                >
+                  <span style={{ width: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><GoogleIcon /></span>
+                  <span>Continue with Google</span>
+                </a>
+                <a
+                  href="https://siratchuahan-meet-ai.hf.space/auth/oauth/github/start"
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                    fontSize: 14, fontWeight: 600, borderRadius: 12, padding: "12px 16px",
+                    border: "1px solid #e2e5ea", background: "#fff", color: "#101828", textDecoration: "none"
+                  }}
+                >
+                  <span style={{ width: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><GithubIcon /></span>
+                  <span>Continue with GitHub</span>
+                </a>
               </div>
 
-              <div style={{ display: "flex", gap: 12 }}>
-                <button type="button" onClick={() => window.location.href = "https://siratchuahan-meet-ai.hf.space/auth/oauth/google/start"} style={{
-                  flex: 1, padding: "11px", background: "#fff", border: "1px solid #d1d5db",
-                  borderRadius: 8, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center",
-                  justifyContent: "center", gap: 8, fontWeight: 500, color: "#374151"
-                }}>
-                  <GoogleIcon /> Google
-                </button>
-                <button type="button" onClick={() => window.location.href = "https://siratchuahan-meet-ai.hf.space/auth/oauth/github/start"} style={{
-                  flex: 1, padding: "11px", background: "#fff", border: "1px solid #d1d5db",
-                  borderRadius: 8, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center",
-                  justifyContent: "center", gap: 8, fontWeight: 500, color: "#374151"
-                }}>
-                  <GithubIcon /> GitHub
-                </button>
-              </div>
-
-              <p style={{ textAlign: "center", marginTop: 28, fontSize: 14, color: "#666" }}>
+              <p style={{ margin: "22px 0 0", fontSize: 14, textAlign: "center", color: "#8a919f" }}>
                 Don't have an account?{" "}
-                <button type="button" onClick={() => { setMode("signup"); setError(""); }} style={{ background: "none", border: "none", color: "#16a34a", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>Sign up</button>
+                <a href="#signup" onClick={(e) => { e.preventDefault(); setMode("signup"); setError(""); }} style={{ color: "#21ac56", fontWeight: 600, textDecoration: "none" }}>Sign up</a>
               </p>
             </form>
           ) : (
-            <form onSubmit={handleSubmit}>
-              <h1 style={{ fontSize: 26, fontWeight: 800, color: "#111", margin: "0 0 6px" }}>Let's get started</h1>
-              <p style={{ color: "#666", fontSize: 14, margin: "0 0 28px" }}>Create your account</p>
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <h1 style={{ margin: 0, fontSize: 44, fontWeight: 800, lineHeight: 1.05, color: "#101828" }}>Let's get started</h1>
+              <p style={{ margin: "8px 0 26px", color: "#8b90a0", fontSize: 19 }}>Create your account</p>
 
               {error && (
-                <div style={{
-                  padding: "10px 14px", borderRadius: 8, background: "#fef2f2", color: "#b91c1c",
-                  fontSize: 13, marginBottom: 18, border: "1px solid #fecaca"
-                }}>
-                  {error}
-                </div>
+                <p style={{ margin: "0 0 14px", color: "#b42318", fontSize: 14 }}>{error}</p>
               )}
 
-              <Input label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="John Doe" />
-              <Input label="Email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="m@example.com" type="email" />
-              <Input label="Password" value={form.password} onChange={(v) => setForm({ ...form, password: v })} placeholder="Password (8+ chars)" type="password" />
-              <Input label="Confirm Password" value={form.confirm} onChange={(v) => setForm({ ...form, confirm: v })} placeholder="Confirm password" type="password" />
+              <label style={{ fontSize: 14, color: "#61727b", fontWeight: 600 }}>Name</label>
+              <input
+                type="text"
+                placeholder="John Doe"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                required
+                style={{
+                  background: "#030c08", border: "1px solid #071910", borderRadius: 12,
+                  color: "#f4f8f5", fontSize: 17, padding: "14px 16px", outline: "none", width: "100%", boxSizing: "border-box"
+                }}
+              />
 
-              <Btn type="submit" disabled={loading} style={{ width: "100%", padding: "13px 20px", borderRadius: 8, fontSize: 15, fontWeight: 600, marginTop: 8 }}>
+              <label style={{ fontSize: 14, color: "#61727b", fontWeight: 600 }}>Email</label>
+              <input
+                type="email"
+                placeholder="m@example.com"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required
+                style={{
+                  background: "#030c08", border: "1px solid #071910", borderRadius: 12,
+                  color: "#f4f8f5", fontSize: 17, padding: "14px 16px", outline: "none", width: "100%", boxSizing: "border-box"
+                }}
+              />
+
+              <label style={{ fontSize: 14, color: "#61727b", fontWeight: 600 }}>Password</label>
+              <input
+                type="password"
+                placeholder="Password (8+ chars)"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+                style={{
+                  background: "#030c08", border: "1px solid #071910", borderRadius: 12,
+                  color: "#f4f8f5", fontSize: 17, padding: "14px 16px", outline: "none", width: "100%", boxSizing: "border-box"
+                }}
+              />
+
+              <label style={{ fontSize: 14, color: "#61727b", fontWeight: 600 }}>Confirm Password</label>
+              <input
+                type="password"
+                placeholder="Confirm password"
+                value={form.confirm}
+                onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+                required
+                style={{
+                  background: "#030c08", border: "1px solid #071910", borderRadius: 12,
+                  color: "#f4f8f5", fontSize: 17, padding: "14px 16px", outline: "none", width: "100%", boxSizing: "border-box"
+                }}
+              />
+
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  marginTop: 14, background: "#2fc564", color: "#03150b", borderRadius: 12,
+                  fontSize: 31, fontWeight: 700, padding: "13px 18px", border: "none", cursor: "pointer", width: "100%"
+                }}
+              >
                 {loading ? "Creating account..." : "Create account"}
-              </Btn>
+              </button>
 
-              <div style={{ textAlign: "center", margin: "20px 0", color: "#888", fontSize: 13, display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ flex: 1, height: 1, background: "#e5e7eb" }}></span>
-                <span>Or continue with</span>
-                <span style={{ flex: 1, height: 1, background: "#e5e7eb" }}></span>
-              </div>
-
-              <div style={{ display: "flex", gap: 12 }}>
-                <button type="button" onClick={() => window.location.href = "https://siratchuahan-meet-ai.hf.space/auth/oauth/google/start"} style={{
-                  flex: 1, padding: "11px", background: "#fff", border: "1px solid #d1d5db",
-                  borderRadius: 8, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center",
-                  justifyContent: "center", gap: 8, fontWeight: 500, color: "#374151"
-                }}>
-                  <GoogleIcon /> Google
-                </button>
-                <button type="button" onClick={() => window.location.href = "https://siratchuahan-meet-ai.hf.space/auth/oauth/github/start"} style={{
-                  flex: 1, padding: "11px", background: "#fff", border: "1px solid #d1d5db",
-                  borderRadius: 8, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center",
-                  justifyContent: "center", gap: 8, fontWeight: 500, color: "#374151"
-                }}>
-                  <GithubIcon /> GitHub
-                </button>
-              </div>
-
-              <p style={{ textAlign: "center", marginTop: 28, fontSize: 14, color: "#666" }}>
+              <p style={{ margin: "22px 0 0", fontSize: 14, textAlign: "center", color: "#8a919f" }}>
                 Already have an account?{" "}
-                <button type="button" onClick={() => { setMode("login"); setError(""); }} style={{ background: "none", border: "none", color: "#16a34a", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>Sign in</button>
+                <a href="#login" onClick={(e) => { e.preventDefault(); setMode("login"); setError(""); }} style={{ color: "#21ac56", fontWeight: 600, textDecoration: "none" }}>Log in</a>
               </p>
             </form>
           )}
         </div>
+
+        {/* Right Brand Pane */}
         <div style={{
-          width: 300, background: "linear-gradient(160deg, #0d2015 0%, #0a1a0f 100%)",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16,
-          padding: 24
+          background: "radial-gradient(circle at 20% 20%, #05482f 0%, #032a1d 42%, #03160f 100%)",
+          display: "grid", placeItems: "center", alignContent: "center", textAlign: "center",
+          color: "#fff", padding: 26
         }}>
           <div style={{
-            width: 72, height: 72, borderRadius: "50%",
-            background: "linear-gradient(135deg, #22c55e, #16a34a)",
-            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36,
-            boxShadow: "0 10px 25px rgba(34, 197, 94, 0.3)"
+            width: 82, height: 82, borderRadius: "50%",
+            background: "linear-gradient(135deg, #2dc861, #1faa50)",
+            display: "grid", placeItems: "center", fontSize: 45, margin: "0 auto 12px"
           }}>🎯</div>
-          <span style={{ color: "#ffffff", fontSize: 26, fontWeight: 800, letterSpacing: "-0.5px" }}>Meet.AI</span>
-          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, textAlign: "center", padding: "0 12px", lineHeight: 1.6 }}>
+          <h3 style={{ margin: "0 0 10px", fontSize: 44, color: "#fff", fontWeight: 800 }}>Meet.AI</h3>
+          <p style={{ margin: 0, color: "#5fc08a", lineHeight: 1.6, fontSize: 14, maxWidth: 220 }}>
             AI-powered meetings with real-time intelligence
           </p>
         </div>
