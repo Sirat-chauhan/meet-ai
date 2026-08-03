@@ -4,7 +4,7 @@ emoji: 🚀
 colorFrom: blue
 colorTo: pink
 sdk: gradio
-app_file: app.py
+app_file: run.py
 pinned: false
 ---
 # Meet AI
