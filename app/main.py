@@ -59,6 +59,23 @@ async def add_no_cache_header(request, call_next):
     return response
 
 
+from sqlalchemy.orm import Session
+from fastapi import Depends
+from sqlalchemy import text
+from .deps import get_db
+
 @app.get("/health")
-def health_check():
-    return {"status": "ok", "app": settings.app_name, "env": settings.app_env}
+def health_check(db: Session = Depends(get_db)):
+    try:
+        # Ping the database to keep Supabase awake
+        db.execute(text("SELECT 1"))
+        db_status = "ok"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    return {
+        "status": "ok", 
+        "database": db_status, 
+        "app": settings.app_name, 
+        "env": settings.app_env
+    }
