@@ -28,7 +28,7 @@ def health_check(text):
     """GPU-decorated function to satisfy ZeroGPU requirements."""
     return f"✅ Meet AI Backend is healthy! Echo: {text}"
 
-# ZeroGPU specifically scans the 'demo' variable for @spaces.GPU functions
+# Create Gradio interface for ZeroGPU
 with gr.Blocks(title="Meet AI API") as demo:
     gr.Markdown("# 🤖 Meet AI - Backend API Server")
     with gr.Row():
@@ -37,6 +37,5 @@ with gr.Blocks(title="Meet AI API") as demo:
     btn = gr.Button("Check Health")
     btn.click(health_check, inp, out)
 
-# Mount Gradio onto FastAPI under /_gradio.
-# Expose 'app' so Hugging Face serves the FastAPI app at root /
-app = gr.mount_gradio_app(fastapi_app, demo, path="/_gradio")
+# Launch demo on port 7860 to satisfy ZeroGPU
+demo.launch(server_name="0.0.0.0", server_port=7860)
