@@ -2,7 +2,6 @@ import os
 import subprocess
 import gradio as gr
 import spaces
-from app.main import app as fastapi_app
 
 def run_migrations():
     print("Running database migrations...")
@@ -26,13 +25,13 @@ run_migrations()
 
 @spaces.GPU
 def health_check(text):
-    """A GPU-decorated function to satisfy ZeroGPU requirements."""
+    """GPU-decorated function to satisfy ZeroGPU requirements."""
     return f"✅ Meet AI Backend is healthy! Echo: {text}"
 
-# Create a minimal Gradio interface that references the GPU function
+# Create the Gradio interface (required by ZeroGPU)
 with gr.Blocks(title="Meet AI API") as demo:
     gr.Markdown("# 🤖 Meet AI - Backend API Server")
-    gr.Markdown("The FastAPI backend is running. Access the API at `/docs`.")
+    gr.Markdown("The FastAPI backend is running. Access the API at `/api/` or `/health`.")
     with gr.Row():
         inp = gr.Textbox(label="Health Check", placeholder="Type anything to test...")
         out = gr.Textbox(label="Response")
@@ -40,13 +39,18 @@ with gr.Blocks(title="Meet AI API") as demo:
     btn = gr.Button("Check Health")
     btn.click(health_check, inp, out)
 
-# Mount the Gradio UI onto our existing FastAPI app
-# All existing API routes (e.g. /api/*, /health, etc.) continue to work
-# Gradio UI is served at /gradio
-app = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
+# Import our FastAPI app and mount its routes onto Gradio's internal FastAPI app.
+# This way HF launches Gradio (satisfying ZeroGPU), and our API routes work too.
+from app.main import app as fastapi_app
 
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 7860))
-    print(f"Starting server on port {port}...")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+# Add all routes from our FastAPI app into Gradio's internal app.
+# Insert at the beginning so our API routes are matched before Gradio's catch-all.
+for route in fastapi_app.routes:
+    demo.app.routes.insert(0, route)
+
+# Copy middleware from our FastAPI app to Gradio's app
+for middleware in reversed(fastapi_app.user_middleware):
+    demo.app.add_middleware(middleware.cls, **middleware.options)
+
+# HF's Gradio runtime auto-detects `demo` and launches it on port 7860.
+# Do NOT call demo.launch() or uvicorn.run() — that would cause a port conflict.
