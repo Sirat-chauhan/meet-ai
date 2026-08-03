@@ -17,11 +17,9 @@ class Settings:
     def __post_init__(self):
         if self.app_env == "production" and self.secret_key == "change-me-in-production":
             raise ValueError("SECRET_KEY must be configured in production environment!")
-        if not self.database_url:
-            raise ValueError("DATABASE_URL is required (e.g., your Supabase PostgreSQL connection string).")
 
 
-    database_url: str = os.getenv("DATABASE_URL", "")
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./ai_meeting.db")
     supabase_url: str = os.getenv("SUPABASE_URL", "")
     supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
 
