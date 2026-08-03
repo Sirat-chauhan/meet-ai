@@ -2,6 +2,7 @@ import os
 import subprocess
 import gradio as gr
 import spaces
+from app.main import app as fastapi_app
 
 def run_migrations():
     print("Running database migrations...")
@@ -28,10 +29,9 @@ def health_check(text):
     """GPU-decorated function to satisfy ZeroGPU requirements."""
     return f"✅ Meet AI Backend is healthy! Echo: {text}"
 
-# Create the Gradio interface (required by ZeroGPU)
+# Create a minimal Gradio interface (required by ZeroGPU)
 with gr.Blocks(title="Meet AI API") as demo:
     gr.Markdown("# 🤖 Meet AI - Backend API Server")
-    gr.Markdown("The FastAPI backend is running. Access the API at `/api/` or `/health`.")
     with gr.Row():
         inp = gr.Textbox(label="Health Check", placeholder="Type anything to test...")
         out = gr.Textbox(label="Response")
@@ -39,43 +39,14 @@ with gr.Blocks(title="Meet AI API") as demo:
     btn = gr.Button("Check Health")
     btn.click(health_check, inp, out)
 
-# Import our FastAPI app and mount its routes onto Gradio's internal FastAPI app.
-# This way HF launches Gradio (satisfying ZeroGPU), and our API routes work too.
-from app.main import app as fastapi_app
+# Mount Gradio onto our FastAPI app at a sub-path.
+# This preserves ALL FastAPI routes (login, signup, dashboard, etc.)
+# and makes Gradio available at /_gradio
+combined_app = gr.mount_gradio_app(fastapi_app, demo, path="/_gradio")
 
-# Add all routes from our FastAPI app into Gradio's internal app.
-# Insert at the beginning so our API routes are matched before Gradio's catch-all.
-for route in fastapi_app.routes:
-    demo.app.routes.insert(0, route)
+# Replace Gradio's internal app with the combined one so demo.launch()
+# starts our full FastAPI + Gradio app on the correct port.
+demo.app = combined_app
 
-# Add middleware directly (can't copy from FastAPI app reliably)
-from starlette.middleware.sessions import SessionMiddleware
-from starlette.middleware.cors import CORSMiddleware
-from app.config import settings
-
-demo.app.add_middleware(
-    SessionMiddleware,
-    secret_key=settings.secret_key,
-    same_site="lax",
-    https_only=False,
-)
-
-allowed_origins = sorted({
-    settings.frontend_origin,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-})
-
-demo.app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Launch the Gradio app (which now includes our FastAPI routes in demo.app)
-# This is the ONLY server starting on port 7860 — no conflict.
+# Launch the combined app
 demo.launch(server_name="0.0.0.0", server_port=7860)
